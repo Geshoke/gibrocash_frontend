@@ -22,6 +22,10 @@ const Transactions = () => {
   });
   const [submitting, setSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [transactionImageUrl, setTransactionImageUrl] = useState(null);
+  const [loadingImage, setLoadingImage] = useState(false);
+  const [imageError, setImageError] = useState('');
 
   useEffect(() => {
     fetchImprests();
@@ -30,6 +34,9 @@ const Transactions = () => {
   useEffect(() => {
     if (selectedImprest) {
       fetchTransactions(selectedImprest);
+      setSelectedTransaction(null);
+      setTransactionImageUrl(null);
+      setImageError('');
     }
   }, [selectedImprest]);
 
@@ -185,6 +192,39 @@ const Transactions = () => {
     return imprests.find((i) => i.id === selectedImprest);
   };
 
+  const handleTransactionClick = async (txn) => {
+    if (selectedTransaction?.id === txn.id) {
+      setSelectedTransaction(null);
+      setTransactionImageUrl(null);
+      setImageError('');
+      return;
+    }
+
+    setSelectedTransaction(txn);
+    setTransactionImageUrl(null);
+    setImageError('');
+
+    if (!txn.images_id) {
+      return;
+    }
+
+    try {
+      setLoadingImage(true);
+      const response = await imageService.getTransactionImage(txn.images_id);
+      const imagePath = response.data?.path;
+      if (imagePath) {
+        setTransactionImageUrl(imageService.getImageUrl(imagePath));
+      } else {
+        setImageError('No image path returned from server');
+      }
+    } catch (err) {
+      console.error('Failed to load transaction image:', err);
+      setImageError('Failed to load image: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setLoadingImage(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -277,7 +317,11 @@ const Transactions = () => {
               </thead>
               <tbody>
                 {(transactions || []).map((txn) => (
-                  <tr key={txn.id}>
+                  <tr
+                    key={txn.id}
+                    onClick={() => handleTransactionClick(txn)}
+                    className={selectedTransaction?.id === txn.id ? 'selected' : ''}
+                  >
                     <td>{formatDate(txn.createdAt)}</td>
                     <td>{txn.item}</td>
                     <td>{txn.quantity}</td>
@@ -286,12 +330,7 @@ const Transactions = () => {
                     <td className="debit">{formatCurrency(txn.price)}</td>
                     <td>
                       {txn.images_id ? (
-                        <button
-                          className="view-receipt-btn"
-                          onClick={() => window.open(imageService.downloadImage(txn.images_id), '_blank')}
-                        >
-                          View
-                        </button>
+                        <span className="has-receipt">📎</span>
                       ) : (
                         <span className="no-receipt">-</span>
                       )}
@@ -299,7 +338,10 @@ const Transactions = () => {
                     <td>
                       <button
                         className="delete-btn"
-                        onClick={() => handleDelete(txn.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(txn.id);
+                        }}
                         title="Delete transaction"
                       >
                         Delete
@@ -317,6 +359,50 @@ const Transactions = () => {
                 </tr>
               </tfoot>
             </table>
+          )}
+
+          {selectedTransaction && (
+            <div className="transaction-image-preview">
+              <div className="preview-header">
+                <h3>Receipt for: {selectedTransaction.item}</h3>
+                <button
+                  className="close-preview-btn"
+                  onClick={() => {
+                    setSelectedTransaction(null);
+                    setTransactionImageUrl(null);
+                    setImageError('');
+                  }}
+                >
+                  &times;
+                </button>
+              </div>
+              <div className="preview-content">
+                {loadingImage ? (
+                  <div className="loading-container small">
+                    <div className="spinner"></div>
+                    <p>Loading file...</p>
+                  </div>
+                ) : imageError ? (
+                  <p className="image-error-message">{imageError}</p>
+                ) : transactionImageUrl ? (
+                  transactionImageUrl.toLowerCase().endsWith('.pdf') ? (
+                    <iframe
+                      src={transactionImageUrl}
+                      title={`Receipt for ${selectedTransaction.item}`}
+                      className="pdf-preview"
+                    />
+                  ) : (
+                    <img
+                      src={transactionImageUrl}
+                      alt={`Receipt for ${selectedTransaction.item}`}
+                      onClick={() => window.open(transactionImageUrl, '_blank')}
+                    />
+                  )
+                ) : (
+                  <p className="no-image-message">No receipt attached to this transaction.</p>
+                )}
+              </div>
+            </div>
           )}
         </div>
 

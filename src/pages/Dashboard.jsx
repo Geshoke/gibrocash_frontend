@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { imprestService, transactionService } from '../services/api';
+import { imprestService, transactionService, imageService } from '../services/api';
 import Layout from '../components/Layout';
 import './Dashboard.css';
 
@@ -12,6 +12,9 @@ const Dashboard = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [transactionImageUrl, setTransactionImageUrl] = useState(null);
+  const [loadingImage, setLoadingImage] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -66,6 +69,8 @@ const Dashboard = () => {
 
   const handleImprestClick = async (imprest) => {
     setSelectedImprest(imprest);
+    setSelectedTransaction(null);
+    setTransactionImageUrl(null);
     try {
       const response = await transactionService.getByImprest(imprest.id);
       // API returns { transactions: { count, rows: [...] } }
@@ -74,6 +79,34 @@ const Dashboard = () => {
     } catch (err) {
       console.error('Failed to load transactions:', err);
       setTransactions([]);
+    }
+  };
+
+  const handleTransactionClick = async (txn) => {
+    if (selectedTransaction?.id === txn.id) {
+      setSelectedTransaction(null);
+      setTransactionImageUrl(null);
+      return;
+    }
+
+    setSelectedTransaction(txn);
+    setTransactionImageUrl(null);
+
+    if (!txn.images_id) {
+      return;
+    }
+
+    try {
+      setLoadingImage(true);
+      const response = await imageService.getTransactionImage(txn.images_id);
+      const imagePath = response.data?.path;
+      if (imagePath) {
+        setTransactionImageUrl(imageService.getImageUrl(imagePath));
+      }
+    } catch (err) {
+      console.error('Failed to load transaction image:', err);
+    } finally {
+      setLoadingImage(false);
     }
   };
 
@@ -207,6 +240,7 @@ const Dashboard = () => {
               transactions.length === 0 ? (
                 <p className="no-data">No transactions recorded yet.</p>
               ) : (
+                <>
                 <table className="transactions-table">
                   <thead>
                     <tr>
@@ -216,29 +250,77 @@ const Dashboard = () => {
                       <th>Unit Price</th>
                       <th>VAT</th>
                       <th>Total (Debit)</th>
+                      <th>Receipt</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(transactions || []).map((txn) => (
-                      <tr key={txn.id}>
+                      <tr
+                        key={txn.id}
+                        onClick={() => handleTransactionClick(txn)}
+                        className={selectedTransaction?.id === txn.id ? 'selected' : ''}
+                      >
                         <td>{formatDate(txn.createdAt)}</td>
                         <td>{txn.item}</td>
                         <td>{txn.quantity}</td>
                         <td>{formatCurrency(txn.unitPrice)}</td>
                         <td>{formatCurrency(txn.vat_charged)}</td>
                         <td className="debit-amount">{formatCurrency(txn.price)}</td>
+                        <td>{txn.images_id ? '📎' : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr>
                       <td colSpan="5" className="total-label">Total Debits:</td>
-                      <td className="debit-amount">
+                      <td className="debit-amount" colSpan="2">
                         {formatCurrency((transactions || []).reduce((sum, t) => sum + parseFloat(t.price || 0), 0))}
                       </td>
                     </tr>
                   </tfoot>
                 </table>
+
+                {selectedTransaction && (
+                  <div className="transaction-image-preview">
+                    <div className="preview-header">
+                      <h3>Receipt: {selectedTransaction.item}</h3>
+                      <button
+                        className="close-preview-btn"
+                        onClick={() => {
+                          setSelectedTransaction(null);
+                          setTransactionImageUrl(null);
+                        }}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                    <div className="preview-content">
+                      {loadingImage ? (
+                        <div className="loading-spinner">
+                          <div className="spinner"></div>
+                          <p>Loading file...</p>
+                        </div>
+                      ) : transactionImageUrl ? (
+                        transactionImageUrl.toLowerCase().endsWith('.pdf') ? (
+                          <iframe
+                            src={transactionImageUrl}
+                            title={`Receipt for ${selectedTransaction.item}`}
+                            className="pdf-preview"
+                          />
+                        ) : (
+                          <img
+                            src={transactionImageUrl}
+                            alt={`Receipt for ${selectedTransaction.item}`}
+                            onClick={() => window.open(transactionImageUrl, '_blank')}
+                          />
+                        )
+                      ) : (
+                        <p className="no-image">No receipt attached.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                </>
               )
             ) : (
               <p className="no-data">Click on an imprest account to view its transactions.</p>

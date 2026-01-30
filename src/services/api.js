@@ -79,7 +79,7 @@ export const imageService = {
   getImprestImages: (imprestID) => api.get(`/requestImage/${imprestID}`),
   getImageCount: (imprestID) => api.get(`/getImprestImagesCount/${imprestID}`),
   getTransactionImage: (imageID) => api.get(`/TransactionImages/${imageID}`),
-  downloadImage: (imageName) => `${API_BASE_URL}/gibroFinanceimages/${imageName}`,
+  getImageUrl: (imagePath) => `${API_BASE_URL}/gibroFinanceimages/${imagePath}`,
 };
 
 export default api;
