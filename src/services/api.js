@@ -88,4 +88,11 @@ export const imageService = {
   getImageUrl: (imagePath) => `${API_BASE_URL}/gibroFinanceimages/${imagePath}`,
 };
 
+// Payroll / B2C endpoints
+// Payload shape per employee: { phoneNumber, amount, remarks }
+export const payrollService = {
+  sendB2C:     (payload)  => api.post('/b2c/send', payload),
+  sendBulkB2C: (payloads) => api.post('/b2c/bulk', { payments: payloads }),
+};
+
 export default api;

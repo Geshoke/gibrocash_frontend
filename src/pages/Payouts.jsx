@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
 import './Payouts.css';
 
@@ -6,40 +7,6 @@ import './Payouts.css';
 const PIN_TIMEOUT_SECS = 600;
 
 // ── Helpers ────────────────────────────────────────────────────
-const parseCSV = (text) => {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) return { headers: [], rows: [] };
-  const parseRow = (line) => {
-    const result = []; let cur = '', inQ = false;
-    for (const ch of line) {
-      if (ch === '"') { inQ = !inQ; }
-      else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
-      else { cur += ch; }
-    }
-    result.push(cur.trim()); return result;
-  };
-  const headers = parseRow(lines[0]);
-  const rows = lines.slice(1).filter(l => l.trim()).map((line, idx) => {
-    const vals = parseRow(line);
-    const row = { _id: idx };
-    headers.forEach((h, i) => { row[h] = vals[i] ?? ''; });
-    return row;
-  });
-  return { headers, rows };
-};
-
-const detectAmountCol = (headers) =>
-  headers.find(h => /amount|salary|pay|gross|net/i.test(h));
-
-const sumAmount = (rows, headers) => {
-  const col = detectAmountCol(headers);
-  if (!col) return null;
-  return rows.reduce((s, r) => {
-    const v = parseFloat((r[col] || '').replace(/,/g, ''));
-    return s + (isNaN(v) ? 0 : v);
-  }, 0);
-};
-
 const fmtCur = (n) =>
   new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n || 0);
 
@@ -60,6 +27,22 @@ const isToday = (dateStr) => {
     d.getFullYear() === now.getFullYear();
 };
 
+/**
+ * Normalise a Kenyan phone number to the 254XXXXXXXXX format
+ * required by the M-Pesa B2C API.
+ */
+const normalizePhone = (raw) => {
+  let p = String(raw).trim().replace(/[\s\-().]/g, '');
+  if (p.startsWith('+')) p = p.slice(1);
+  // 07xx or 01xx → 254xx
+  if (/^0[17]/.test(p)) p = '254' + p.slice(1);
+  // bare 7xxxxxxxx or 1xxxxxxxx (9 digits)
+  if (/^[17]\d{8}$/.test(p)) p = '254' + p;
+  return p;
+};
+
+const isValidPhone = (p) => /^254[17]\d{8}$/.test(normalizePhone(p));
+
 const STATUS_META = {
   pending_pin: { label: 'Awaiting PIN', cls: 'pending',    dot: '#f59e0b' },
   processing:  { label: 'Processing',   cls: 'processing', dot: '#3b82f6' },
@@ -72,29 +55,41 @@ const STATUS_META = {
 const TYPE_LABEL = { payroll: 'Payroll', single: 'Single Payment', b2b: 'B2B Payment' };
 
 const NAV_ITEMS = [
-  { key: 'payroll', icon: '💰', label: 'Payroll'        },
-  { key: 'single',  icon: '📤', label: 'Single Payment' },
-  { key: 'b2b',     icon: '🏦', label: 'B2B Payment'    },
-  { key: 'history', icon: '📋', label: 'History'        },
+  { key: 'payroll',  icon: '💰', label: 'Payroll'        },
+  { key: 'single',   icon: '📤', label: 'Single Payment' },
+  { key: 'b2b',      icon: '🏦', label: 'B2B Payment'    },
+  { key: 'contacts', icon: '👥', label: 'Contacts'       },
+  { key: 'history',  icon: '📋', label: 'History'        },
 ];
 
 // ── Component ──────────────────────────────────────────────────
 const Payouts = () => {
   const [view, setView] = useState('history');
 
-  // Payroll
-  const [csvData, setCsvData]         = useState({ headers: [], rows: [] });
-  const [payrollName, setPayrollName] = useState('');
-  const [csvError, setCsvError]       = useState('');
+  // ── Contacts (persisted in localStorage) ────────────────────
+  const [contacts, setContacts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('gibrocash_contacts') || '[]'); }
+    catch { return []; }
+  });
+  const [contactForm, setContactForm] = useState({ staffNo: '', name: '', phoneNumber: '' });
+  const [contactError, setContactError] = useState('');
 
-  // Single
+  // ── Payroll (Excel import) ───────────────────────────────────
+  const [payrollName, setPayrollName] = useState('');
+  // xlsxRows: [{ _id, staffNo, name, netPay, phone }]  phone = auto-matched from contacts
+  const [xlsxRows, setXlsxRows]       = useState([]);
+  // inlinePhones: { [_id]: string }  overrides per-row phone entered by the user
+  const [inlinePhones, setInlinePhones] = useState({});
+  const [xlsxError, setXlsxError]     = useState('');
+
+  // ── Single ───────────────────────────────────────────────────
   const [single, setSingle] = useState({ contact: '', amount: '', description: '' });
 
-  // B2B
+  // ── B2B ──────────────────────────────────────────────────────
   const [b2bType, setB2bType] = useState('paybill');
   const [b2b, setB2b] = useState({ paybillNumber: '', accountNumber: '', tillNumber: '', amount: '' });
 
-  // PIN modal
+  // ── PIN modal ────────────────────────────────────────────────
   const [modal, setModal]           = useState(null);
   const [pin, setPin]               = useState('');
   const [timeLeft, setTimeLeft]     = useState(PIN_TIMEOUT_SECS);
@@ -102,9 +97,14 @@ const Payouts = () => {
   const modalRef = useRef(null);
   const timerRef = useRef(null);
 
-  // History
+  // ── History ──────────────────────────────────────────────────
   const [history, setHistory]   = useState([]);
   const [expanded, setExpanded] = useState(null);
+
+  // Persist contacts to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('gibrocash_contacts', JSON.stringify(contacts));
+  }, [contacts]);
 
   useEffect(() => { modalRef.current = modal; }, [modal]);
 
@@ -124,13 +124,13 @@ const Payouts = () => {
     return () => clearInterval(timerRef.current);
   }, [modal]); // eslint-disable-line
 
-  // ── Derived stats ───────────────────────────────────────────
-  const totalDisbursed  = history.filter(h => h.status === 'completed').reduce((s, h) => s + (h.amount || 0), 0);
-  const pendingCount    = history.filter(h => h.status === 'pending_pin' || h.status === 'processing').length;
-  const settledToday    = history.filter(h => h.status === 'completed' && isToday(h.date)).reduce((s, h) => s + (h.amount || 0), 0);
-  const failedCount     = history.filter(h => h.status === 'failed' || h.status === 'expired').length;
+  // ── Derived stats ────────────────────────────────────────────
+  const totalDisbursed = history.filter(h => h.status === 'completed').reduce((s, h) => s + (h.amount || 0), 0);
+  const pendingCount   = history.filter(h => h.status === 'pending_pin' || h.status === 'processing').length;
+  const settledToday   = history.filter(h => h.status === 'completed' && isToday(h.date)).reduce((s, h) => s + (h.amount || 0), 0);
+  const failedCount    = history.filter(h => h.status === 'failed' || h.status === 'expired').length;
 
-  // ── History helpers ─────────────────────────────────────────
+  // ── History helpers ──────────────────────────────────────────
   const pushHistory = (m, status) => {
     setHistory(prev => [{
       id: m.id, type: m.type, label: m.label,
@@ -139,7 +139,7 @@ const Payouts = () => {
     }, ...prev]);
   };
 
-  // ── Modal helpers ───────────────────────────────────────────
+  // ── Modal helpers ────────────────────────────────────────────
   const openModal = (type, label, amount, payload) => {
     clearInterval(timerRef.current);
     setModal({ id: Date.now().toString(), type, label, amount, payload });
@@ -162,40 +162,130 @@ const Payouts = () => {
     setTimeout(() => {
       setHistory(prev => prev.map(h => h.id === m.id ? { ...h, status: 'completed' } : h));
     }, 2500);
-    if (m.type === 'payroll') { setCsvData({ headers: [], rows: [] }); setPayrollName(''); }
+    if (m.type === 'payroll') { setXlsxRows([]); setPayrollName(''); setInlinePhones({}); }
     if (m.type === 'single')  setSingle({ contact: '', amount: '', description: '' });
     if (m.type === 'b2b')     setB2b({ paybillNumber: '', accountNumber: '', tillNumber: '', amount: '' });
     setView('history');
   };
 
-  // ── CSV ─────────────────────────────────────────────────────
-  const handleCSV = (e) => {
+  // ── Excel (XLSX) import ──────────────────────────────────────
+  const handleXLSX = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.csv')) { setCsvError('Please upload a .csv file.'); return; }
-    setCsvError('');
+    const fname = file.name.toLowerCase();
+    if (!fname.endsWith('.xlsx') && !fname.endsWith('.xls')) {
+      setXlsxError('Please upload an Excel file (.xlsx or .xls).');
+      return;
+    }
+    setXlsxError('');
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const parsed = parseCSV(ev.target.result);
-      parsed.headers.length === 0
-        ? setCsvError('CSV is empty or unreadable.')
-        : setCsvData(parsed);
+      try {
+        const wb  = XLSX.read(ev.target.result, { type: 'array' });
+        const ws  = wb.Sheets[wb.SheetNames[0]];
+        const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        // Find the header row (must contain "Employee Name")
+        let headerRow = -1;
+        for (let i = 0; i < raw.length; i++) {
+          if (raw[i].some(cell => /employee name/i.test(String(cell)))) {
+            headerRow = i; break;
+          }
+        }
+        if (headerRow === -1) {
+          setXlsxError('Could not find employee data. Expected an "Employee Name" column.');
+          return;
+        }
+
+        const headers   = raw[headerRow].map(h => String(h).trim());
+        const nameIdx   = headers.findIndex(h => /employee name/i.test(h));
+        const staffIdx  = headers.findIndex(h => /staff no/i.test(h));
+        const netPayIdx = headers.findIndex(h => /net pay/i.test(h));
+
+        if (nameIdx === -1 || netPayIdx === -1) {
+          setXlsxError('Missing required columns: "Employee Name" and "Net Pay".');
+          return;
+        }
+
+        const employees = [];
+        for (let i = headerRow + 1; i < raw.length; i++) {
+          const row    = raw[i];
+          const name   = String(row[nameIdx]  ?? '').trim();
+          const staffNo = staffIdx >= 0 ? String(row[staffIdx] ?? '').replace(/\.0$/, '').trim() : '';
+          const netPay = parseFloat(row[netPayIdx]) || 0;
+
+          // Skip blank rows, the grand totals row, and zero-pay rows
+          if (!name || /grand total/i.test(name) || netPay <= 0) continue;
+
+          // Auto-match a saved contact: prefer Staff No match, fall back to name match
+          const match = contacts.find(c =>
+            (staffNo && c.staffNo && String(c.staffNo).trim() === staffNo) ||
+            c.name.trim().toLowerCase() === name.toLowerCase()
+          );
+
+          employees.push({ _id: i, staffNo, name, netPay, phone: match?.phoneNumber || '' });
+        }
+
+        if (employees.length === 0) {
+          setXlsxError('No employee records found in the file.');
+          return;
+        }
+
+        setXlsxRows(employees);
+        setInlinePhones({});
+      } catch {
+        setXlsxError('Failed to parse the Excel file. Please check the file format.');
+      }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   };
 
-  // ── Submit handlers ─────────────────────────────────────────
+  // ── Contacts CRUD ────────────────────────────────────────────
+  const addContact = () => {
+    const name    = contactForm.name.trim();
+    const phone   = contactForm.phoneNumber.trim();
+    const staffNo = contactForm.staffNo.trim();
+    if (!name)  { setContactError('Employee name is required.'); return; }
+    if (!phone) { setContactError('Phone number is required.'); return; }
+    if (!isValidPhone(phone)) {
+      setContactError('Enter a valid Kenyan mobile number (e.g. 0712345678 or 254712345678).');
+      return;
+    }
+    if (contacts.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+      setContactError(`A contact named "${name}" already exists.`);
+      return;
+    }
+    setContacts(prev => [
+      ...prev,
+      { id: Date.now().toString(), staffNo, name, phoneNumber: normalizePhone(phone) },
+    ]);
+    setContactForm({ staffNo: '', name: '', phoneNumber: '' });
+    setContactError('');
+  };
+
+  const deleteContact = (id) => setContacts(prev => prev.filter(c => c.id !== id));
+
+  // ── Submit handlers ──────────────────────────────────────────
+  const resolvedRows = xlsxRows.map(r => ({
+    ...r,
+    resolvedPhone: inlinePhones[r._id] !== undefined ? inlinePhones[r._id] : r.phone,
+  }));
+  const missingPhones = resolvedRows.filter(r => !r.resolvedPhone.trim()).length;
+  const payrollReady  = payrollName.trim() && xlsxRows.length > 0 && missingPhones === 0;
+
   const submitPayroll = () => {
-    if (!payrollName.trim() || csvData.rows.length === 0) return;
-    // TODO: POST /payouts/payroll/initiate
-    openModal('payroll', payrollName.trim(), sumAmount(csvData.rows, csvData.headers), {
-      headers: csvData.headers, rows: csvData.rows,
-    });
+    if (!payrollReady) return;
+    const payloads = resolvedRows.map(row => ({
+      phoneNumber: normalizePhone(row.resolvedPhone),
+      amount:      row.netPay,
+      remarks:     `${payrollName.trim()} - ${row.name}`,
+    }));
+    const totalAmount = xlsxRows.reduce((s, r) => s + r.netPay, 0);
+    openModal('payroll', payrollName.trim(), totalAmount, { rows: resolvedRows, payloads });
   };
 
   const submitSingle = () => {
     if (!single.contact.trim() || !single.amount) return;
-    // TODO: POST /payouts/single/initiate
     openModal('single', `Payment to ${single.contact}`, parseFloat(single.amount) || 0, { ...single });
   };
 
@@ -203,7 +293,6 @@ const Payouts = () => {
     const label = b2bType === 'paybill'
       ? `Paybill ${b2b.paybillNumber} — Acc: ${b2b.accountNumber}`
       : `Till ${b2b.tillNumber}`;
-    // TODO: POST /payouts/b2b/initiate
     openModal('b2b', label, parseFloat(b2b.amount) || 0, { b2bType, ...b2b });
   };
 
@@ -211,7 +300,7 @@ const Payouts = () => {
     ? b2b.paybillNumber && b2b.accountNumber && b2b.amount
     : b2b.tillNumber && b2b.amount;
 
-  // ── Render ──────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────
   return (
     <Layout>
       <div className="po-page">
@@ -221,7 +310,6 @@ const Payouts = () => {
           <div className="po-hero-card primary">
             <div className="po-hero-pill">● AVAILABLE TO DISBURSE</div>
             <div className="po-hero-amount">KES —</div>
-            {/* TODO: fetch balance from M-Pesa B2C account API */}
             <div className="po-hero-sub">Source: <span className="po-hero-src">M-Pesa Business Account</span></div>
             <div className="po-hero-indicators">
               <span className="po-ind"><span className="po-ind-dot green"></span>System operational</span>
@@ -232,7 +320,6 @@ const Payouts = () => {
           <div className="po-hero-card secondary">
             <div className="po-hero-pill muted">AMOUNT IN ACCOUNT</div>
             <div className="po-hero-amount dim">KES —</div>
-            {/* TODO: fetch from account balance API */}
             <div className="po-hero-sub">Working balance available for disbursement</div>
           </div>
         </div>
@@ -282,7 +369,7 @@ const Payouts = () => {
           {/* Left: active view */}
           <div className="po-content-panel">
 
-            {/* History view */}
+            {/* ── History ─────────────────────────────────── */}
             {view === 'history' && (
               <>
                 <div className="po-panel-header">
@@ -343,14 +430,20 @@ const Payouts = () => {
                                     <table className="po-table po-sub-table">
                                       <thead>
                                         <tr>
-                                          {entry.payload.headers.map(h => <th key={h}>{h}</th>)}
+                                          <th>Staff No</th>
+                                          <th>Employee Name</th>
+                                          <th>Net Pay</th>
+                                          <th>Phone</th>
                                           <th>Status</th>
                                         </tr>
                                       </thead>
                                       <tbody>
                                         {entry.payload.rows.map(row => (
                                           <tr key={row._id}>
-                                            {entry.payload.headers.map(h => <td key={h}>{row[h]}</td>)}
+                                            <td>{row.staffNo || '—'}</td>
+                                            <td>{row.name}</td>
+                                            <td>{fmtCur(row.netPay)}</td>
+                                            <td className="td-mono">{row.resolvedPhone}</td>
                                             <td>
                                               <span className="po-status-dot" style={{ background: STATUS_META[entry.status]?.dot }}></span>
                                               <span className={`po-status-txt ${STATUS_META[entry.status]?.cls}`}>
@@ -374,13 +467,13 @@ const Payouts = () => {
               </>
             )}
 
-            {/* Payroll form */}
+            {/* ── Payroll import ───────────────────────────── */}
             {view === 'payroll' && (
               <>
                 <div className="po-panel-header">
                   <div>
                     <h2>Payroll Import</h2>
-                    <p>Upload a CSV, review, then initiate. Director PIN required to disburse.</p>
+                    <p>Upload the muster roll (.xlsx), review, then initiate. Director PIN required to disburse.</p>
                   </div>
                 </div>
                 <div className="po-form">
@@ -390,59 +483,103 @@ const Payouts = () => {
                       type="text"
                       value={payrollName}
                       onChange={e => setPayrollName(e.target.value)}
-                      placeholder="e.g. March 2026 Payroll"
+                      placeholder="e.g. February 2026 Payroll"
                     />
                   </div>
+
                   <div className="po-field">
-                    <label>Upload CSV File</label>
-                    <label htmlFor="csv-upload" className={`po-drop-zone ${csvData.rows.length > 0 ? 'loaded' : ''}`}>
-                      <span className="po-drop-icon">{csvData.rows.length > 0 ? '✅' : '📂'}</span>
+                    <label>Upload Muster Roll</label>
+                    <label htmlFor="xlsx-upload" className={`po-drop-zone ${xlsxRows.length > 0 ? 'loaded' : ''}`}>
+                      <span className="po-drop-icon">{xlsxRows.length > 0 ? '✅' : '📊'}</span>
                       <span className="po-drop-main">
-                        {csvData.rows.length > 0 ? `${csvData.rows.length} records loaded` : 'Click to upload CSV'}
+                        {xlsxRows.length > 0 ? `${xlsxRows.length} employees loaded` : 'Click to upload Excel file'}
                       </span>
                       <span className="po-drop-hint">
-                        {csvData.rows.length > 0 ? 'Click to replace file' : 'Comma-separated values (.csv)'}
+                        {xlsxRows.length > 0 ? 'Click to replace file' : 'Excel spreadsheet (.xlsx / .xls)'}
                       </span>
-                      <input id="csv-upload" type="file" accept=".csv" onChange={handleCSV} />
+                      <input id="xlsx-upload" type="file" accept=".xlsx,.xls" onChange={handleXLSX} />
                     </label>
-                    {csvError && <p className="po-field-error">{csvError}</p>}
+                    {xlsxError && <p className="po-field-error">{xlsxError}</p>}
                   </div>
 
-                  {csvData.rows.length > 0 && (
+                  {xlsxRows.length > 0 && (
                     <>
                       <div className="po-csv-meta">
-                        <span>{csvData.rows.length} records</span>
-                        {sumAmount(csvData.rows, csvData.headers) !== null && (
-                          <span>Total: <strong>{fmtCur(sumAmount(csvData.rows, csvData.headers))}</strong></span>
+                        <span>{xlsxRows.length} employees</span>
+                        <span>Total Net Pay: <strong>{fmtCur(xlsxRows.reduce((s, r) => s + r.netPay, 0))}</strong></span>
+                        {missingPhones > 0 && (
+                          <span className="po-meta-warn">
+                            ⚠ {missingPhones} missing phone{missingPhones > 1 ? 's' : ''}
+                          </span>
                         )}
                       </div>
+
                       <div className="po-table-wrap">
                         <table className="po-table">
-                          <thead><tr>{csvData.headers.map(h => <th key={h}>{h}</th>)}</tr></thead>
+                          <thead>
+                            <tr>
+                              <th>Staff No</th>
+                              <th>Employee Name</th>
+                              <th>Net Pay</th>
+                              <th>Phone Number</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
                           <tbody>
-                            {csvData.rows.map(row => (
-                              <tr key={row._id}>{csvData.headers.map(h => <td key={h}>{row[h]}</td>)}</tr>
+                            {resolvedRows.map(row => (
+                              <tr key={row._id}>
+                                <td className="td-mono">{row.staffNo || '—'}</td>
+                                <td>{row.name}</td>
+                                <td className="td-amount">{fmtCur(row.netPay)}</td>
+                                <td>
+                                  <input
+                                    className={`po-inline-phone ${row.resolvedPhone && !isValidPhone(row.resolvedPhone) ? 'invalid' : ''}`}
+                                    type="text"
+                                    value={row.resolvedPhone}
+                                    onChange={e => setInlinePhones(p => ({ ...p, [row._id]: e.target.value }))}
+                                    placeholder="e.g. 0712345678"
+                                  />
+                                </td>
+                                <td>
+                                  {row.resolvedPhone.trim()
+                                    ? <span className="po-contact-badge matched">Matched</span>
+                                    : <span className="po-contact-badge missing">No phone</span>
+                                  }
+                                </td>
+                              </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
+
+                      {missingPhones > 0 && (
+                        <p className="po-phone-hint">
+                          Fill in phone numbers above, or save them to{' '}
+                          <button className="po-link-btn" onClick={() => setView('contacts')}>
+                            Contacts
+                          </button>{' '}
+                          for auto-fill next time.
+                        </p>
+                      )}
                     </>
                   )}
 
                   <div className="po-form-footer">
-                    <button className="po-initiate-btn" onClick={submitPayroll}
-                      disabled={!payrollName.trim() || csvData.rows.length === 0}>
+                    <button className="po-initiate-btn" onClick={submitPayroll} disabled={!payrollReady}>
                       Initiate Payroll Payment
                     </button>
-                    {!payrollName.trim() && csvData.rows.length > 0 && (
+                    {!payrollName.trim() && xlsxRows.length > 0 && (
                       <span className="po-hint">Enter a payroll name to continue</span>
+                    )}
+                    {missingPhones > 0 && payrollName.trim() && (
+                      <span className="po-hint">Fill in all phone numbers to continue</span>
                     )}
                   </div>
                 </div>
               </>
             )}
 
-            {/* Single Payment form */}
+            {/* ── Single Payment ───────────────────────────── */}
             {view === 'single' && (
               <>
                 <div className="po-panel-header">
@@ -485,7 +622,7 @@ const Payouts = () => {
               </>
             )}
 
-            {/* B2B Payment form */}
+            {/* ── B2B Payment ──────────────────────────────── */}
             {view === 'b2b' && (
               <>
                 <div className="po-panel-header">
@@ -550,6 +687,101 @@ const Payouts = () => {
                 </div>
               </>
             )}
+
+            {/* ── Contacts ─────────────────────────────────── */}
+            {view === 'contacts' && (
+              <>
+                <div className="po-panel-header">
+                  <div>
+                    <h2>Employee Contacts</h2>
+                    <p>Phone numbers saved here auto-fill during payroll import.</p>
+                  </div>
+                </div>
+                <div className="po-form">
+
+                  {/* Add contact form */}
+                  <div className="po-contacts-section">
+                    <h3 className="po-section-title">Add Contact</h3>
+                    <div className="po-contacts-grid">
+                      <div className="po-field">
+                        <label>Employee Name *</label>
+                        <input
+                          type="text"
+                          value={contactForm.name}
+                          onChange={e => setContactForm(p => ({ ...p, name: e.target.value }))}
+                          placeholder="e.g. Joel Thamu Kibuna"
+                          onKeyDown={e => e.key === 'Enter' && addContact()}
+                        />
+                      </div>
+                      <div className="po-field">
+                        <label>Staff No <span className="po-label-opt">(optional)</span></label>
+                        <input
+                          type="text"
+                          value={contactForm.staffNo}
+                          onChange={e => setContactForm(p => ({ ...p, staffNo: e.target.value }))}
+                          placeholder="e.g. 13"
+                          onKeyDown={e => e.key === 'Enter' && addContact()}
+                        />
+                      </div>
+                      <div className="po-field">
+                        <label>Phone Number *</label>
+                        <input
+                          type="text"
+                          value={contactForm.phoneNumber}
+                          onChange={e => setContactForm(p => ({ ...p, phoneNumber: e.target.value }))}
+                          placeholder="e.g. 0712345678"
+                          onKeyDown={e => e.key === 'Enter' && addContact()}
+                        />
+                      </div>
+                    </div>
+                    {contactError && <p className="po-field-error">{contactError}</p>}
+                    <button className="po-add-contact-btn" onClick={addContact}>
+                      + Add Contact
+                    </button>
+                  </div>
+
+                  {/* Contact list */}
+                  {contacts.length > 0 ? (
+                    <div className="po-table-wrap">
+                      <div className="po-contacts-count">{contacts.length} contact{contacts.length !== 1 ? 's' : ''} saved</div>
+                      <table className="po-table">
+                        <thead>
+                          <tr>
+                            <th>Staff No</th>
+                            <th>Employee Name</th>
+                            <th>Phone Number</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {contacts.map(c => (
+                            <tr key={c.id}>
+                              <td className="td-mono">{c.staffNo || '—'}</td>
+                              <td>{c.name}</td>
+                              <td className="td-mono">{c.phoneNumber}</td>
+                              <td>
+                                <button
+                                  className="po-del-btn"
+                                  onClick={() => deleteContact(c.id)}
+                                  title="Remove contact"
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="po-empty">
+                      <span className="po-empty-icon">👥</span>
+                      <p>No contacts yet. Add employee phone numbers to speed up payroll processing.</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Right: navigation panel */}
@@ -566,9 +798,12 @@ const Payouts = () => {
                 {item.key === 'history' && history.length > 0 && (
                   <span className="po-nav-count">{history.length}</span>
                 )}
-                {item.key === 'single' || item.key === 'payroll' || item.key === 'b2b' ? (
+                {item.key === 'contacts' && contacts.length > 0 && (
+                  <span className="po-nav-count">{contacts.length}</span>
+                )}
+                {(item.key === 'single' || item.key === 'payroll' || item.key === 'b2b' || item.key === 'contacts') && (
                   <span className="po-nav-arrow">›</span>
-                ) : null}
+                )}
               </button>
             ))}
 
@@ -624,6 +859,12 @@ const Payouts = () => {
                       <div className="pin-summary-row">
                         <span className="psr-label">Amount</span>
                         <span className="psr-amount">{fmtCur(modal.amount)}</span>
+                      </div>
+                    )}
+                    {modal.type === 'payroll' && modal.payload?.payloads && (
+                      <div className="pin-summary-row">
+                        <span className="psr-label">Recipients</span>
+                        <span className="psr-val">{modal.payload.payloads.length} employees</span>
                       </div>
                     )}
                   </div>

@@ -637,6 +637,117 @@
 .pin-expired-body p { color: #64748b; font-size: 0.875rem; line-height: 1.6; margin-bottom: 10px; }
 .pin-expired-body .pin-cancel-btn { width: 100%; margin-top: 8px; }
 
+/* ── Payroll: inline phone input ──────────────────────────────── */
+.po-inline-phone {
+  width: 100%;
+  max-width: 180px;
+  padding: 6px 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: monospace;
+  color: #1e293b;
+  background: #f8fafc;
+  transition: border-color 0.2s;
+}
+.po-inline-phone:focus   { outline: none; border-color: #3b82f6; background: white; }
+.po-inline-phone.invalid { border-color: #f87171; background: #fff5f5; }
+
+/* Contact match / missing badges */
+.po-contact-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.po-contact-badge.matched { background: #dcfce7; color: #15803d; }
+.po-contact-badge.missing { background: #fef2f2; color: #dc2626; }
+
+/* Meta bar warning */
+.po-meta-warn { color: #d97706; font-weight: 600; }
+
+/* Hint with inline link */
+.po-phone-hint {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+}
+.po-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #2563eb;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.po-link-btn:hover { color: #1d4ed8; }
+
+/* ── Contacts view ─────────────────────────────────────────────── */
+.po-contacts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.po-section-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+}
+
+.po-contacts-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 14px;
+  align-items: end;
+}
+
+.po-label-opt {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.po-add-contact-btn {
+  align-self: flex-start;
+  padding: 9px 20px;
+  background: #1e293b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.po-add-contact-btn:hover { background: #0f172a; }
+
+.po-contacts-count {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  padding: 8px 0 4px;
+}
+
+.po-del-btn {
+  background: none;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  color: #dc2626;
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.po-del-btn:hover { background: #fef2f2; }
+
 /* ── Responsive ────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .po-stats-row { grid-template-columns: repeat(2, 1fr); }
