@@ -1,16 +1,20 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Imprests from './pages/Imprests';
 import Transactions from './pages/Transactions';
 import Proposals from './pages/Proposals';
+import Projects from './pages/Projects';
+import Payouts from './pages/Payouts';
 import Users from './pages/Users';
 import './App.css';
 
 function App() {
   return (
+    <ThemeProvider>
     <AuthProvider>
       <Router>
         <Routes>
@@ -48,6 +52,22 @@ function App() {
             }
           />
           <Route
+            path="/projects"
+            element={
+              <ProtectedRoute>
+                <Projects />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payouts"
+            element={
+              <ProtectedRoute>
+                <Payouts />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/users"
             element={
               <ProtectedRoute>
@@ -60,6 +80,7 @@ function App() {
         </Routes>
       </Router>
     </AuthProvider>
+    </ThemeProvider>
   );
 }
 

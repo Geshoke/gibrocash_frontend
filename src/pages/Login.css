@@ -21,11 +21,11 @@
   margin-bottom: 32px;
 }
 
-.login-header h1 {
-  color: #1a365d;
-  font-size: 2rem;
-  margin: 0 0 8px 0;
-  font-weight: 700;
+.login-logo {
+  width: 180px;
+  height: auto;
+  margin: 0 auto 8px auto;
+  display: block;
 }
 
 .login-header p {

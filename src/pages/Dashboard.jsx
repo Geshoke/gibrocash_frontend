@@ -15,6 +15,9 @@ const Dashboard = () => {
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [transactionImageUrl, setTransactionImageUrl] = useState(null);
   const [loadingImage, setLoadingImage] = useState(false);
+  const [filterText, setFilterText] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -43,6 +46,7 @@ const Dashboard = () => {
           source: imp.source || 'company imprest',
           createdAt: imp.createdAt,
           assignedTo: imp.assignedTo,
+          project: imp.project || null,
         }));
         setImprests(adminImprests);
       } else {
@@ -131,6 +135,16 @@ const Dashboard = () => {
     return allocated - used;
   };
 
+  const filteredImprests = [...imprests]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .filter((imp) => {
+      if (filterText && !imp.name.toLowerCase().includes(filterText.toLowerCase())) return false;
+      const created = new Date(imp.createdAt);
+      if (filterStartDate && created < new Date(filterStartDate)) return false;
+      if (filterEndDate && created > new Date(filterEndDate + 'T23:59:59')) return false;
+      return true;
+    });
+
   if (loading) {
     return (
       <Layout>
@@ -175,13 +189,52 @@ const Dashboard = () => {
         <div className="dashboard-content">
           <div className="imprests-panel">
             <h2>Imprest Accounts</h2>
+
+            <div className="imprest-filters">
+              <input
+                type="text"
+                className="filter-input"
+                placeholder="Search by title..."
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+              />
+              <div className="filter-dates">
+                <div className="filter-date-group">
+                  <label>From</label>
+                  <input
+                    type="date"
+                    className="filter-input"
+                    value={filterStartDate}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                  />
+                </div>
+                <div className="filter-date-group">
+                  <label>To</label>
+                  <input
+                    type="date"
+                    className="filter-input"
+                    value={filterEndDate}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              {(filterText || filterStartDate || filterEndDate) && (
+                <button
+                  className="clear-filters-btn"
+                  onClick={() => { setFilterText(''); setFilterStartDate(''); setFilterEndDate(''); }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+
             {imprests.length === 0 ? (
               <p className="no-data">No imprest accounts found.</p>
+            ) : filteredImprests.length === 0 ? (
+              <p className="no-data">No imprests match the current filters.</p>
             ) : (
               <ul className="imprest-list">
-                {[...imprests]
-                  .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-                  .map((imprest) => (
+                {filteredImprests.map((imprest) => (
                   <li
                     key={imprest.id}
                     className={`imprest-item ${selectedImprest?.id === imprest.id ? 'selected' : ''}`}
@@ -189,9 +242,16 @@ const Dashboard = () => {
                   >
                     <div className="imprest-info">
                       <h4 className="imprest-title">{imprest.name}</h4>
-                      <span className={`source-badge ${imprest.source?.replace(/\s+/g, '-').toLowerCase()}`}>
-                        {imprest.source}
-                      </span>
+                      <div className="imprest-tags">
+                        <span className={`source-badge ${imprest.source?.replace(/\s+/g, '-').toLowerCase()}`}>
+                          {imprest.source}
+                        </span>
+                        {imprest.project && (
+                          <span className="project-badge">
+                            🗂️ {imprest.project.name}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <span className="imprest-date">{formatDate(imprest.createdAt)}</span>
                     <div className="imprest-amounts">

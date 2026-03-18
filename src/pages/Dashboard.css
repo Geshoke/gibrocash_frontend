@@ -100,7 +100,7 @@
 
 .dashboard-content {
   display: grid;
-  grid-template-columns: 350px 1fr;
+  grid-template-columns: 525px 1fr;
   gap: 24px;
 }
 
@@ -131,6 +131,66 @@
   color: #a0aec0;
   text-align: center;
   padding: 24px;
+}
+
+.imprest-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.filter-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #2d3748;
+  background: #f7fafc;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.filter-input:focus {
+  outline: none;
+  border-color: #3182ce;
+  background: white;
+}
+
+.filter-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.filter-date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.filter-date-group label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #a0aec0;
+  font-weight: 600;
+}
+
+.clear-filters-btn {
+  background: none;
+  border: none;
+  color: #3182ce;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.clear-filters-btn:hover {
+  color: #1a365d;
 }
 
 .imprest-list {
@@ -182,10 +242,29 @@
 
 .imprest-info {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   margin-bottom: 4px;
+}
+
+.imprest-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.project-badge {
+  display: inline-block;
+  background: #ebf8ff;
+  color: #2b6cb0;
+  border: 1px solid #bee3f8;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  white-space: nowrap;
 }
 
 .imprest-title {

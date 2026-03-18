@@ -68,6 +68,12 @@ export const proposalService = {
   getById: (id) => api.get(`/proposals/${id}`),
 };
 
+// Project endpoints
+export const projectService = {
+  getAll: () => api.get('/projects'),
+  getById: (id) => api.get(`/projects/${id}`),
+};
+
 // Image endpoints
 export const imageService = {
   upload: (formData) => api.post('/upload', formData, {

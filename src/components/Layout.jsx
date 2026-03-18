@@ -1,19 +1,24 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import logo from '../assets/logo.png';
 import './Layout.css';
 
 const Layout = ({ children }) => {
   const { user, logout, isAdmin } = useAuth();
+  const { dark, toggleTheme } = useTheme();
   const location = useLocation();
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: '📊' },
+    { path: '/projects', label: 'Projects', icon: '🗂️' },
     { path: '/imprests', label: 'Imprests', icon: '💰' },
     { path: '/transactions', label: 'Transactions', icon: '📝' },
     { path: '/proposals', label: 'Proposals', icon: '📋' },
   ];
 
   if (isAdmin()) {
+    navItems.push({ path: '/payouts', label: 'Payouts', icon: '💸' });
     navItems.push({ path: '/users', label: 'Users', icon: '👥' });
   }
 
@@ -21,7 +26,7 @@ const Layout = ({ children }) => {
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h1>GibroCash</h1>
+          <img src={logo} alt="Gibro Enterprise Ltd" className="sidebar-logo" />
         </div>
 
         <nav className="sidebar-nav">
@@ -45,6 +50,9 @@ const Layout = ({ children }) => {
               <span className="user-role">{user?.designation}</span>
             </div>
           </div>
+          <button onClick={toggleTheme} className="theme-toggle-button">
+            {dark ? '☀️ Light Mode' : '🌙 Dark Mode'}
+          </button>
           <button onClick={logout} className="logout-button">
             Logout
           </button>

@@ -1,0 +1,467 @@
+.projects-page {
+  padding: 24px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  margin: 0 0 4px 0;
+  color: #1a365d;
+  font-size: 1.75rem;
+}
+
+.page-header p {
+  margin: 0;
+  color: #718096;
+  font-size: 0.95rem;
+}
+
+.error-banner {
+  background: #fed7d7;
+  color: #c53030;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+/* Two-column layout */
+.projects-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Projects list panel */
+.projects-list-panel h2 {
+  font-size: 1rem;
+  color: #4a5568;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 12px 0;
+}
+
+.project-card {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.project-card:hover {
+  border-color: #3182ce;
+  box-shadow: 0 2px 8px rgba(49, 130, 206, 0.15);
+}
+
+.project-card.selected {
+  border-color: #3182ce;
+  background: #ebf8ff;
+}
+
+.project-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.project-card-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #1a365d;
+  font-weight: 600;
+}
+
+.project-description {
+  font-size: 0.82rem;
+  color: #718096;
+  margin: 0 0 10px 0;
+  line-height: 1.4;
+}
+
+.project-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stat-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.stat-value.credit { color: #2f855a; }
+.stat-value.debit  { color: #c53030; }
+.stat-value.positive { color: #2f855a; }
+.stat-value.negative { color: #c53030; }
+
+.project-date {
+  font-size: 0.75rem;
+  color: #a0aec0;
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.status-badge.active     { background: #c6f6d5; color: #276749; }
+.status-badge.completed  { background: #bee3f8; color: #2c5282; }
+.status-badge.on-hold    { background: #fefcbf; color: #744210; }
+
+.status-badge.large {
+  font-size: 0.85rem;
+  padding: 5px 14px;
+}
+
+/* Detail panel */
+.project-detail-panel {
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  min-height: 400px;
+  padding: 24px;
+}
+
+.no-selection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #a0aec0;
+  font-size: 0.95rem;
+}
+
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.detail-header h2 {
+  margin: 0 0 4px 0;
+  color: #1a365d;
+  font-size: 1.4rem;
+}
+
+.detail-description {
+  margin: 0;
+  color: #718096;
+  font-size: 0.9rem;
+}
+
+.detail-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.summary-card {
+  padding: 14px 16px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-card.credit  { background: #f0fff4; border: 1px solid #9ae6b4; }
+.summary-card.debit   { background: #fff5f5; border: 1px solid #feb2b2; }
+.summary-card.balance { background: #ebf8ff; border: 1px solid #90cdf4; }
+
+.summary-card .label {
+  font-size: 0.78rem;
+  color: #718096;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-card .amount {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a365d;
+}
+
+/* Imprests section */
+.imprests-section h3 {
+  font-size: 1rem;
+  color: #4a5568;
+  margin: 0 0 14px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.imprest-block {
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.imprest-block-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.imprest-block-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.imprest-block-title h4 {
+  margin: 0;
+  color: #1a365d;
+  font-size: 0.95rem;
+}
+
+.source-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #e2e8f0;
+  color: #4a5568;
+  text-transform: capitalize;
+}
+
+.imprest-block-amounts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  flex-wrap: wrap;
+}
+
+.imprest-block-amounts .credit   { color: #2f855a; font-weight: 600; }
+.imprest-block-amounts .debit    { color: #c53030; font-weight: 600; }
+.imprest-block-amounts .positive { color: #2f855a; font-weight: 600; }
+.imprest-block-amounts .negative { color: #c53030; font-weight: 600; }
+.imprest-block-amounts .separator { color: #cbd5e0; }
+
+.imprest-assignees {
+  font-size: 0.8rem;
+  color: #718096;
+  margin-bottom: 10px;
+}
+
+.no-data-inline {
+  color: #a0aec0;
+  font-size: 0.85rem;
+  margin: 8px 0 0 0;
+}
+
+/* Transactions table */
+.transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.transactions-table.compact {
+  font-size: 0.82rem;
+}
+
+.transactions-table th {
+  background: #edf2f7;
+  color: #4a5568;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.transactions-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f4f8;
+  color: #2d3748;
+}
+
+.transactions-table tr:hover td {
+  background: #f7fafc;
+}
+
+.transactions-table tr.selected td {
+  background: #ebf8ff;
+}
+
+.transactions-table tbody tr {
+  cursor: pointer;
+}
+
+.transactions-table tfoot td {
+  font-weight: 700;
+  padding-top: 10px;
+  color: #1a365d;
+  border-top: 2px solid #e2e8f0;
+  border-bottom: none;
+}
+
+.transactions-table .total-label {
+  text-align: right;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.debit { color: #c53030; font-weight: 600; }
+
+.has-receipt { font-size: 1rem; }
+.no-receipt { color: #cbd5e0; }
+
+/* Receipt preview */
+.transaction-image-preview {
+  margin-top: 12px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #edf2f7;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.preview-header h4 {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #2d3748;
+}
+
+.close-preview-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #718096;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.close-preview-btn:hover { color: #1a365d; }
+
+.preview-content {
+  padding: 14px;
+  text-align: center;
+}
+
+.preview-content img {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.preview-content .pdf-preview {
+  width: 100%;
+  height: 400px;
+  border: none;
+}
+
+.no-image-message {
+  color: #a0aec0;
+  font-size: 0.85rem;
+}
+
+/* Loading */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 12px;
+}
+
+.loading-container.small {
+  padding: 20px;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #3182ce;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px 20px;
+  color: #a0aec0;
+}
+
+@media (max-width: 900px) {
+  .projects-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .imprest-block-header {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 600px) {
+  .projects-page {
+    padding: 16px;
+  }
+
+  .detail-summary {
+    grid-template-columns: 1fr;
+  }
+}
