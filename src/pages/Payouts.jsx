@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
+import { payoutService } from '../services/api';
 import './Payouts.css';
 
 // ── Constants ──────────────────────────────────────────────────
@@ -94,6 +95,9 @@ const Payouts = () => {
   const [pin, setPin]               = useState('');
   const [timeLeft, setTimeLeft]     = useState(PIN_TIMEOUT_SECS);
   const [pinExpired, setPinExpired] = useState(false);
+  const [pinError, setPinError]     = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [requesting, setRequesting] = useState(false);
   const modalRef = useRef(null);
   const timerRef = useRef(null);
 
@@ -140,10 +144,10 @@ const Payouts = () => {
   };
 
   // ── Modal helpers ────────────────────────────────────────────
-  const openModal = (type, label, amount, payload) => {
+  const openModal = (type, label, amount, payload, payoutId) => {
     clearInterval(timerRef.current);
-    setModal({ id: Date.now().toString(), type, label, amount, payload });
-    setPin(''); setTimeLeft(PIN_TIMEOUT_SECS); setPinExpired(false);
+    setModal({ id: Date.now().toString(), type, label, amount, payload, payoutId });
+    setPin(''); setTimeLeft(PIN_TIMEOUT_SECS); setPinExpired(false); setPinError('');
   };
 
   const cancelModal = () => {
@@ -152,20 +156,34 @@ const Payouts = () => {
     setModal(null); setPin('');
   };
 
-  const submitPin = () => {
-    if (pin.length !== 5 || pinExpired) return;
-    clearInterval(timerRef.current);
+  const submitPin = async () => {
+    if (pin.length !== 5 || pinExpired || submitting) return;
+    setSubmitting(true);
+    setPinError('');
     const m = { ...modal };
-    pushHistory(m, 'processing');
-    setModal(null); setPin('');
-    // TODO: POST /payouts/authorise  { payoutId: m.id, pin }
-    setTimeout(() => {
-      setHistory(prev => prev.map(h => h.id === m.id ? { ...h, status: 'completed' } : h));
-    }, 2500);
-    if (m.type === 'payroll') { setXlsxRows([]); setPayrollName(''); setInlinePhones({}); }
-    if (m.type === 'single')  setSingle({ contact: '', amount: '', description: '' });
-    if (m.type === 'b2b')     setB2b({ paybillNumber: '', accountNumber: '', tillNumber: '', amount: '' });
-    setView('history');
+    try {
+      await payoutService.authorise(m.payoutId, pin);
+      clearInterval(timerRef.current);
+      pushHistory(m, 'completed');
+      setModal(null); setPin('');
+      if (m.type === 'payroll') { setXlsxRows([]); setPayrollName(''); setInlinePhones({}); }
+      if (m.type === 'single')  setSingle({ contact: '', amount: '', description: '' });
+      if (m.type === 'b2b')     setB2b({ paybillNumber: '', accountNumber: '', tillNumber: '', amount: '' });
+      setView('history');
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 401) {
+        setPinError('Incorrect PIN. Please try again.');
+      } else if (status === 410) {
+        clearInterval(timerRef.current);
+        setPinExpired(true);
+        pushHistory(m, 'expired');
+      } else {
+        setPinError('Something went wrong. Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ── Excel (XLSX) import ──────────────────────────────────────
@@ -273,27 +291,66 @@ const Payouts = () => {
   const missingPhones = resolvedRows.filter(r => !r.resolvedPhone.trim()).length;
   const payrollReady  = payrollName.trim() && xlsxRows.length > 0 && missingPhones === 0;
 
-  const submitPayroll = () => {
-    if (!payrollReady) return;
+  const submitPayroll = async () => {
+    if (!payrollReady || requesting) return;
     const payloads = resolvedRows.map(row => ({
       phoneNumber: normalizePhone(row.resolvedPhone),
       amount:      row.netPay,
       remarks:     `${payrollName.trim()} - ${row.name}`,
     }));
     const totalAmount = xlsxRows.reduce((s, r) => s + r.netPay, 0);
-    openModal('payroll', payrollName.trim(), totalAmount, { rows: resolvedRows, payloads });
+    const label = payrollName.trim();
+    setRequesting(true);
+    try {
+      const { data } = await payoutService.request({
+        type: 'payroll', payload: { rows: resolvedRows, payloads }, label, amount: totalAmount,
+      });
+      openModal('payroll', label, totalAmount, { rows: resolvedRows, payloads }, data.payoutId);
+    } catch {
+      alert('Failed to initiate payout. Please try again.');
+    } finally {
+      setRequesting(false);
+    }
   };
 
-  const submitSingle = () => {
-    if (!single.contact.trim() || !single.amount) return;
-    openModal('single', `Payment to ${single.contact}`, parseFloat(single.amount) || 0, { ...single });
+  const submitSingle = async () => {
+    if (!single.contact.trim() || !single.amount || requesting) return;
+    const label = `Payment to ${single.contact}`;
+    const amount = parseFloat(single.amount) || 0;
+    const payload = {
+      phoneNumber: normalizePhone(single.contact),
+      amount,
+      remarks:     single.description || 'Payment',
+      description: single.description,
+    };
+    setRequesting(true);
+    try {
+      const { data } = await payoutService.request({ type: 'single', payload, label, amount });
+      openModal('single', label, amount, { ...single }, data.payoutId);
+    } catch {
+      alert('Failed to initiate payout. Please try again.');
+    } finally {
+      setRequesting(false);
+    }
   };
 
-  const submitB2B = () => {
+  const submitB2B = async () => {
+    if (!b2bReady || requesting) return;
     const label = b2bType === 'paybill'
       ? `Paybill ${b2b.paybillNumber} — Acc: ${b2b.accountNumber}`
       : `Till ${b2b.tillNumber}`;
-    openModal('b2b', label, parseFloat(b2b.amount) || 0, { b2bType, ...b2b });
+    const amount = parseFloat(b2b.amount) || 0;
+    setRequesting(true);
+    try {
+      const { data } = await payoutService.request({
+        type: 'b2b', payload: { b2bType, ...b2b }, label, amount,
+      });
+      openModal('b2b', label, amount, { b2bType, ...b2b }, data.payoutId);
+    } catch {
+      alert('Failed to initiate payout. Please try again.');
+    } finally {
+      setRequesting(false);
+    }
   };
 
   const b2bReady = b2bType === 'paybill'
@@ -477,6 +534,7 @@ const Payouts = () => {
                   </div>
                 </div>
                 <div className="po-form">
+                  <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> per employee (Safaricom B2C limit)</p>
                   <div className="po-field">
                     <label>Payroll Period / Name</label>
                     <input
@@ -565,8 +623,8 @@ const Payouts = () => {
                   )}
 
                   <div className="po-form-footer">
-                    <button className="po-initiate-btn" onClick={submitPayroll} disabled={!payrollReady}>
-                      Initiate Payroll Payment
+                    <button className="po-initiate-btn" onClick={submitPayroll} disabled={!payrollReady || requesting}>
+                      {requesting ? 'Sending SMS…' : 'Initiate Payroll Payment'}
                     </button>
                     {!payrollName.trim() && xlsxRows.length > 0 && (
                       <span className="po-hint">Enter a payroll name to continue</span>
@@ -589,6 +647,7 @@ const Payouts = () => {
                   </div>
                 </div>
                 <div className="po-form narrow">
+                  <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
                   <div className="po-field">
                     <label>Contact / Phone Number</label>
                     <input type="text" value={single.contact}
@@ -614,8 +673,8 @@ const Payouts = () => {
                   )}
                   <div className="po-form-footer">
                     <button className="po-initiate-btn" onClick={submitSingle}
-                      disabled={!single.contact.trim() || !single.amount}>
-                      Initiate Payment
+                      disabled={!single.contact.trim() || !single.amount || requesting}>
+                      {requesting ? 'Sending SMS…' : 'Initiate Payment'}
                     </button>
                   </div>
                 </div>
@@ -632,6 +691,7 @@ const Payouts = () => {
                   </div>
                 </div>
                 <div className="po-form narrow">
+                  <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
                   <div className="po-toggle-group">
                     <button className={`po-toggle-opt ${b2bType === 'paybill' ? 'active' : ''}`}
                       onClick={() => setB2bType('paybill')}>Paybill</button>
@@ -680,8 +740,8 @@ const Payouts = () => {
                   )}
 
                   <div className="po-form-footer">
-                    <button className="po-initiate-btn" onClick={submitB2B} disabled={!b2bReady}>
-                      Initiate B2B Payment
+                    <button className="po-initiate-btn" onClick={submitB2B} disabled={!b2bReady || requesting}>
+                      {requesting ? 'Sending SMS…' : 'Initiate B2B Payment'}
                     </button>
                   </div>
                 </div>
@@ -874,13 +934,14 @@ const Payouts = () => {
                   </div>
                   <input
                     type="text" inputMode="numeric" maxLength={5} value={pin}
-                    onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                    onChange={e => { setPin(e.target.value.replace(/\D/g, '').slice(0, 5)); setPinError(''); }}
                     placeholder="Enter 5-digit PIN" className="pin-input" autoFocus
                   />
+                  {pinError && <p className="pin-error">{pinError}</p>}
                   <div className="pin-modal-actions">
-                    <button className="pin-cancel-btn" onClick={cancelModal}>Cancel</button>
-                    <button className="pin-auth-btn" onClick={submitPin} disabled={pin.length !== 5}>
-                      Authorise Payment
+                    <button className="pin-cancel-btn" onClick={cancelModal} disabled={submitting}>Cancel</button>
+                    <button className="pin-auth-btn" onClick={submitPin} disabled={pin.length !== 5 || submitting}>
+                      {submitting ? 'Authorising…' : 'Authorise Payment'}
                     </button>
                   </div>
                 </>

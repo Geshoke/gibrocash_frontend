@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const PAYBILL_BASE_URL = import.meta.env.VITE_PAYBILL_URL;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -93,6 +94,24 @@ export const imageService = {
 export const payrollService = {
   sendB2C:     (payload)  => api.post('/b2c/send', payload),
   sendBulkB2C: (payloads) => api.post('/b2c/bulk', { payments: payloads }),
+};
+
+// Payout PIN flow — talks directly to the paybill backend
+const paybillApi = axios.create({
+  baseURL: PAYBILL_BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+export const payoutService = {
+  // Called when user clicks Initiate — generates PIN and sends SMS
+  // Body: { type, payload, label, amount }
+  request: (data) =>
+    paybillApi.post('/shortcode_3576329/payouts/request', data),
+
+  // Called when user submits the PIN in the modal
+  // Body: { payoutId, pin }
+  authorise: (payoutId, pin) =>
+    paybillApi.post('/shortcode_3576329/payouts/authorise', { payoutId, pin }),
 };
 
 export default api;
