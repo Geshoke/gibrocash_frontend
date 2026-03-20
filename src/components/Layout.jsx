@@ -5,7 +5,7 @@ import logo from '../assets/logo.png';
 import './Layout.css';
 
 const Layout = ({ children }) => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, canPayout } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const location = useLocation();
 
@@ -17,8 +17,10 @@ const Layout = ({ children }) => {
     { path: '/proposals', label: 'Proposals', icon: '📋' },
   ];
 
-  if (isAdmin()) {
+  if (canPayout()) {
     navItems.push({ path: '/payouts', label: 'Payouts', icon: '💸' });
+  }
+  if (isAdmin()) {
     navItems.push({ path: '/users', label: 'Users', icon: '👥' });
   }
 

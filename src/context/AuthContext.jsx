@@ -35,6 +35,7 @@ export const AuthProvider = ({ children }) => {
       name: userData.name,
       phone: userData.phone,
       designation: userData.designation,
+      payout: userData.payout,
     }));
 
     setUser({
@@ -42,6 +43,7 @@ export const AuthProvider = ({ children }) => {
       name: userData.name,
       phone: userData.phone,
       designation: userData.designation,
+      payout: userData.payout,
     });
 
     return userData;
@@ -57,11 +59,16 @@ export const AuthProvider = ({ children }) => {
     return user?.designation?.toLowerCase() === 'admin';
   };
 
+  const canPayout = () => {
+    return isAdmin() || (user?.designation?.toLowerCase() === 'staff' && user?.payout === true);
+  };
+
   const value = {
     user,
     login,
     logout,
     isAdmin,
+    canPayout,
     isAuthenticated: !!user,
     loading,
   };
