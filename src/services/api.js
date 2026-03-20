@@ -112,6 +112,10 @@ export const payoutService = {
   // Body: { payoutId, pin }
   authorise: (payoutId, pin) =>
     paybillApi.post('/shortcode_3576329/payouts/authorise', { payoutId, pin }),
+
+  // Fetch persisted B2C payment ledger from DB
+  getPayments: () =>
+    paybillApi.get('/shortcode_3576329/b2c/payments'),
 };
 
 export default api;

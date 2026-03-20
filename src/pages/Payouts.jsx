@@ -105,6 +105,35 @@ const Payouts = () => {
   const [history, setHistory]   = useState([]);
   const [expanded, setExpanded] = useState(null);
 
+  const mapDbStatus = (s) => {
+    if (s === 'success') return 'completed';
+    if (s === 'pending') return 'processing';
+    return 'failed'; // failed, timeout
+  };
+
+  const fetchLedger = () => {
+    payoutService.getPayments()
+      .then(({ data }) => {
+        const mapped = (data.payments || []).map(p => ({
+          id: String(p.id),
+          type: 'single',
+          label: p.remarks || '—',
+          amount: parseFloat(p.amount),
+          date: p.initiatedAt,
+          status: mapDbStatus(p.status),
+          payload: {
+            partyB: p.partyB,
+            transactionReceipt: p.transactionReceipt,
+            receiverPublicName: p.receiverPublicName,
+          },
+        }));
+        setHistory(mapped);
+      })
+      .catch(() => {}); // silent — stale data is better than a crash
+  };
+
+  useEffect(() => { fetchLedger(); }, []); // eslint-disable-line
+
   // Persist contacts to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('gibrocash_contacts', JSON.stringify(contacts));
@@ -119,7 +148,6 @@ const Payouts = () => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
           setPinExpired(true);
-          if (modalRef.current) pushHistory(modalRef.current, 'expired');
           return 0;
         }
         return prev - 1;
@@ -134,15 +162,6 @@ const Payouts = () => {
   const settledToday   = history.filter(h => h.status === 'completed' && isToday(h.date)).reduce((s, h) => s + (h.amount || 0), 0);
   const failedCount    = history.filter(h => h.status === 'failed' || h.status === 'expired').length;
 
-  // ── History helpers ──────────────────────────────────────────
-  const pushHistory = (m, status) => {
-    setHistory(prev => [{
-      id: m.id, type: m.type, label: m.label,
-      amount: m.amount, date: new Date().toISOString(),
-      status, payload: m.payload,
-    }, ...prev]);
-  };
-
   // ── Modal helpers ────────────────────────────────────────────
   const openModal = (type, label, amount, payload, payoutId) => {
     clearInterval(timerRef.current);
@@ -152,8 +171,8 @@ const Payouts = () => {
 
   const cancelModal = () => {
     clearInterval(timerRef.current);
-    if (modalRef.current && !pinExpired) pushHistory(modalRef.current, 'cancelled');
     setModal(null); setPin('');
+    fetchLedger();
   };
 
   const submitPin = async () => {
@@ -164,8 +183,8 @@ const Payouts = () => {
     try {
       await payoutService.authorise(m.payoutId, pin);
       clearInterval(timerRef.current);
-      pushHistory(m, 'completed');
       setModal(null); setPin('');
+      fetchLedger();
       if (m.type === 'payroll') { setXlsxRows([]); setPayrollName(''); setInlinePhones({}); }
       if (m.type === 'single')  setSingle({ contact: '', amount: '', description: '' });
       if (m.type === 'b2b')     setB2b({ paybillNumber: '', accountNumber: '', tillNumber: '', amount: '' });
