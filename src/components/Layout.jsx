@@ -1,12 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 import logo from '../assets/logo.png';
 import './Layout.css';
 
 const Layout = ({ children }) => {
   const { user, logout, isAdmin, canPayout } = useAuth();
-  const { dark, toggleTheme } = useTheme();
   const location = useLocation();
 
   const navItems = [
@@ -44,6 +42,14 @@ const Layout = ({ children }) => {
           ))}
         </nav>
 
+        <Link
+          to="/settings"
+          className={`nav-item settings-nav-item ${location.pathname === '/settings' ? 'active' : ''}`}
+        >
+          <span className="nav-icon">⚙️</span>
+          <span className="nav-label">Settings</span>
+        </Link>
+
         <div className="sidebar-footer">
           <div className="user-info">
             <div className="user-avatar">{user?.name?.charAt(0).toUpperCase()}</div>
@@ -52,9 +58,6 @@ const Layout = ({ children }) => {
               <span className="user-role">{user?.designation}</span>
             </div>
           </div>
-          <button onClick={toggleTheme} className="theme-toggle-button">
-            {dark ? '☀️ Light Mode' : '🌙 Dark Mode'}
-          </button>
           <button onClick={logout} className="logout-button">
             Logout
           </button>

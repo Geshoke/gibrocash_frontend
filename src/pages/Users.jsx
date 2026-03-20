@@ -28,6 +28,16 @@ const Users = () => {
     }
   };
 
+  const handleToggleSuperAdmin = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, super_admin: value } : u));
+    try {
+      await userService.toggleSuperAdmin(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update super admin:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, super_admin: !value } : u));
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-KE', {
       year: 'numeric',
@@ -72,6 +82,10 @@ const Users = () => {
                   <th>Phone</th>
                   <th>Role</th>
                   <th>Created</th>
+                  <th>
+                    Super Admin
+                    <span className="super-admin-hint"> — category management</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -92,6 +106,16 @@ const Users = () => {
                       </span>
                     </td>
                     <td>{formatDate(u.createdAt)}</td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.super_admin ?? false}
+                          onChange={e => handleToggleSuperAdmin(u, e.target.checked)}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
                   </tr>
                 ))}
               </tbody>

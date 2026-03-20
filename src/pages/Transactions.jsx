@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { imprestService, transactionService, imageService } from '../services/api';
+import { imprestService, transactionService, imageService, categoryService } from '../services/api';
 import Layout from '../components/Layout';
 import './Transactions.css';
 
@@ -17,8 +17,13 @@ const Transactions = () => {
   const [loadingImage, setLoadingImage] = useState(false);
   const [imageError, setImageError] = useState('');
 
+  // Categories
+  const [categories, setCategories] = useState([]);
+  const [categoryPopoverTxnId, setCategoryPopoverTxnId] = useState(null);
+
   useEffect(() => {
     fetchImprests();
+    fetchCategories();
   }, [user]);
 
   useEffect(() => {
@@ -27,8 +32,17 @@ const Transactions = () => {
       setSelectedTransaction(null);
       setTransactionImageUrl(null);
       setImageError('');
+      setCategoryPopoverTxnId(null);
     }
   }, [selectedImprest]);
+
+  // Close category popover when clicking outside
+  useEffect(() => {
+    if (!categoryPopoverTxnId) return;
+    const close = () => setCategoryPopoverTxnId(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [categoryPopoverTxnId]);
 
   const fetchImprests = async () => {
     try {
@@ -77,6 +91,45 @@ const Transactions = () => {
       setTransactions([]);
     } finally {
       setLoadingTxns(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await categoryService.getAll();
+      setCategories(response.data.categories || []);
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+    }
+  };
+
+  const handleAssignCategory = async (e, txnId, catId) => {
+    e.stopPropagation();
+    try {
+      await categoryService.assignToTransaction(txnId, catId);
+      const cat = categories.find(c => c.id === catId);
+      setTransactions(prev => prev.map(t =>
+        t.id === txnId
+          ? { ...t, categories: [...(t.categories || []), cat] }
+          : t
+      ));
+      setCategoryPopoverTxnId(null);
+    } catch (err) {
+      console.error('Failed to assign category:', err);
+    }
+  };
+
+  const handleRemoveCategory = async (e, txnId, catId) => {
+    e.stopPropagation();
+    try {
+      await categoryService.removeFromTransaction(txnId, catId);
+      setTransactions(prev => prev.map(t =>
+        t.id === txnId
+          ? { ...t, categories: (t.categories || []).filter(c => c.id !== catId) }
+          : t
+      ));
+    } catch (err) {
+      console.error('Failed to remove category:', err);
     }
   };
 
@@ -212,6 +265,7 @@ const Transactions = () => {
                   <th>Unit Price</th>
                   <th>VAT</th>
                   <th>Total</th>
+                  <th>Categories</th>
                   <th>Receipt</th>
                 </tr>
               </thead>
@@ -228,6 +282,48 @@ const Transactions = () => {
                     <td>{formatCurrency(txn.unitPrice)}</td>
                     <td>{formatCurrency(txn.vat_charged)}</td>
                     <td className="debit">{formatCurrency(txn.price)}</td>
+                    <td
+                      className="categories-cell"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <div className="categories-in-row">
+                        {(txn.categories || []).map(cat => (
+                          <span key={cat.id} className="category-tag">
+                            {cat.cat_name}
+                            <button
+                              className="remove-tag-btn"
+                              onClick={e => handleRemoveCategory(e, txn.id, cat.id)}
+                            >×</button>
+                          </span>
+                        ))}
+                        <button
+                          className="add-category-btn"
+                          onClick={e => {
+                            e.stopPropagation();
+                            setCategoryPopoverTxnId(categoryPopoverTxnId === txn.id ? null : txn.id);
+                          }}
+                        >+</button>
+                      </div>
+                      {categoryPopoverTxnId === txn.id && (
+                        <div className="category-popover" onClick={e => e.stopPropagation()}>
+                          {categories
+                            .filter(c => !(txn.categories || []).some(tc => tc.id === c.id))
+                            .map(cat => (
+                              <button
+                                key={cat.id}
+                                className="category-popover-item"
+                                onClick={e => handleAssignCategory(e, txn.id, cat.id)}
+                              >
+                                {cat.cat_name}
+                              </button>
+                            ))
+                          }
+                          {categories.filter(c => !(txn.categories || []).some(tc => tc.id === c.id)).length === 0 && (
+                            <span className="category-popover-empty">All categories assigned</span>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       {txn.images_id ? (
                         <span className="has-receipt">📎</span>
@@ -241,9 +337,11 @@ const Transactions = () => {
               <tfoot>
                 <tr>
                   <td colSpan="5" className="total-label">Total:</td>
-                  <td className="debit" colSpan="2">
+                  <td className="debit">
                     {formatCurrency((transactions || []).reduce((sum, t) => sum + parseFloat(t.price || 0), 0))}
                   </td>
+                  <td></td>
+                  <td></td>
                 </tr>
               </tfoot>
             </table>
@@ -294,6 +392,7 @@ const Transactions = () => {
           )}
         </div>
       </div>
+
     </Layout>
   );
 };

@@ -10,6 +10,7 @@ import Proposals from './pages/Proposals';
 import Projects from './pages/Projects';
 import Payouts from './pages/Payouts';
 import Users from './pages/Users';
+import Settings from './pages/Settings';
 import './App.css';
 
 function App() {
@@ -72,6 +73,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Users />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
               </ProtectedRoute>
             }
           />

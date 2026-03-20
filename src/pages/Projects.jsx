@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { projectService, transactionService, imageService } from '../services/api';
+import { projectService, transactionService, categoryService, imageService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import './Projects.css';
 
 const Projects = () => {
+  const { isAdmin } = useAuth();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectDetail, setProjectDetail] = useState(null);
@@ -14,12 +16,33 @@ const Projects = () => {
   const [imprestTransactions, setImprestTransactions] = useState({});
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [projectSearch, setProjectSearch] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [categoryPopoverTxnId, setCategoryPopoverTxnId] = useState(null);
   const [transactionImageUrl, setTransactionImageUrl] = useState(null);
   const [loadingImage, setLoadingImage] = useState(false);
+  const [movePopoverImprestId, setMovePopoverImprestId] = useState(null);
+  const [moveModalImprest, setMoveModalImprest] = useState(null);
+  const [movingImprestId, setMovingImprestId] = useState(null);
 
   useEffect(() => {
     fetchProjects();
+    fetchCategories();
   }, []);
+
+  useEffect(() => {
+    if (!categoryPopoverTxnId) return;
+    const close = () => setCategoryPopoverTxnId(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [categoryPopoverTxnId]);
+
+  useEffect(() => {
+    if (!movePopoverImprestId) return;
+    const close = () => setMovePopoverImprestId(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [movePopoverImprestId]);
 
   const fetchProjects = async () => {
     try {
@@ -32,6 +55,47 @@ const Projects = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await categoryService.getAll();
+      setCategories(response.data.categories || []);
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+    }
+  };
+
+  const handleAssignCategory = async (e, txnId, catId, imprestId) => {
+    e.stopPropagation();
+    try {
+      await categoryService.assignToTransaction(txnId, catId);
+      const cat = categories.find(c => c.id === catId);
+      setImprestTransactions(prev => ({
+        ...prev,
+        [imprestId]: (prev[imprestId] || []).map(t =>
+          t.id === txnId ? { ...t, categories: [...(t.categories || []), cat] } : t
+        ),
+      }));
+      setCategoryPopoverTxnId(null);
+    } catch (err) {
+      console.error('Failed to assign category:', err);
+    }
+  };
+
+  const handleRemoveCategory = async (e, txnId, catId, imprestId) => {
+    e.stopPropagation();
+    try {
+      await categoryService.removeFromTransaction(txnId, catId);
+      setImprestTransactions(prev => ({
+        ...prev,
+        [imprestId]: (prev[imprestId] || []).map(t =>
+          t.id === txnId ? { ...t, categories: (t.categories || []).filter(c => c.id !== catId) } : t
+        ),
+      }));
+    } catch (err) {
+      console.error('Failed to remove category:', err);
     }
   };
 
@@ -111,6 +175,32 @@ const Projects = () => {
     }
   };
 
+  const handleMoveImprest = async (imprestId, newProjectId) => {
+    setMovingImprestId(imprestId);
+    setMovePopoverImprestId(null);
+    try {
+      await projectService.assignImprest(imprestId, newProjectId);
+      // Refresh the current project detail and the project list
+      const [detailRes, listRes] = await Promise.all([
+        projectService.getById(selectedProject.id),
+        projectService.getAll(),
+      ]);
+      setProjectDetail(detailRes.data.project);
+      setProjects(listRes.data.projects || []);
+      // Clear cached transactions for this imprest since it moved
+      setImprestTransactions(prev => {
+        const next = { ...prev };
+        delete next[imprestId];
+        return next;
+      });
+      if (expandedImprest === imprestId) setExpandedImprest(null);
+    } catch (err) {
+      console.error('Failed to move imprest:', err);
+    } finally {
+      setMovingImprestId(null);
+    }
+  };
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
@@ -175,13 +265,28 @@ const Projects = () => {
         <div className="projects-layout">
           {/* Projects List */}
           <div className="projects-list-panel">
-            <h2>All Projects</h2>
+            <div className="projects-list-header">
+              <h2>All Projects</h2>
+              <input
+                type="text"
+                className="project-search-input"
+                placeholder="Search projects..."
+                value={projectSearch}
+                onChange={e => setProjectSearch(e.target.value)}
+              />
+            </div>
             {projects.length === 0 ? (
               <div className="no-data">
                 <p>No projects found.</p>
               </div>
-            ) : (
-              projects.map((project) => (
+            ) : (() => {
+              const filtered = projects.filter(p =>
+                p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
+                (p.description || '').toLowerCase().includes(projectSearch.toLowerCase())
+              );
+              return filtered.length === 0 ? (
+                <div className="no-data"><p>No projects match your search.</p></div>
+              ) : filtered.map((project) => (
                 <div
                   key={project.id}
                   className={`project-card ${selectedProject?.id === project.id ? 'selected' : ''}`}
@@ -218,8 +323,8 @@ const Projects = () => {
                   </div>
                   <span className="project-date">{formatDate(project.createdAt)}</span>
                 </div>
-              ))
-            )}
+              ));
+            })()}
           </div>
 
           {/* Project Detail */}
@@ -274,9 +379,12 @@ const Projects = () => {
                   ) : (
                     (projectDetail.imprests || []).map((imprest) => {
                       const isExpanded = expandedImprest === imprest.id;
-                      const txns = imprestTransactions[imprest.id] || imprest.transactions || [];
-                      const used = txns.reduce((sum, t) => sum + parseFloat(t.price || 0), 0);
+                      const txns = imprestTransactions[imprest.id] || [];
                       const allocated = parseFloat(imprest.amount) || 0;
+                      // Use fetched transactions to compute used once loaded, else fall back to API value
+                      const used = imprestTransactions[imprest.id]
+                        ? txns.reduce((sum, t) => sum + parseFloat(t.price || 0), 0)
+                        : parseFloat(imprest.usedAmount) || 0;
                       const balance = allocated - used;
                       return (
                       <div key={imprest.id} className={`imprest-block ${isExpanded ? 'expanded' : ''}`}>
@@ -284,12 +392,49 @@ const Projects = () => {
                           className="imprest-block-header imprest-block-clickable"
                           onClick={() => handleImprestClick(imprest.id)}
                         >
-                          <div className="imprest-block-title">
-                            <span className={`imprest-chevron ${isExpanded ? 'open' : ''}`}>›</span>
-                            <h4>{imprest.name}</h4>
-                            <span className={`source-tag ${imprest.source?.replace(/\s+/g, '-').toLowerCase()}`}>
-                              {imprest.source}
-                            </span>
+                          <div className="imprest-block-title-row">
+                            <div className="imprest-block-title">
+                              <span className={`imprest-chevron ${isExpanded ? 'open' : ''}`}>›</span>
+                              <h4>{imprest.name}</h4>
+                              <span className={`source-tag ${imprest.source?.replace(/\s+/g, '-').toLowerCase()}`}>
+                                {imprest.source}
+                              </span>
+                            </div>
+                            {isAdmin() && (
+                              <div
+                                className="imprest-menu-wrapper"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <button
+                                  className="imprest-menu-btn"
+                                  disabled={movingImprestId === imprest.id}
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    setMovePopoverImprestId(
+                                      movePopoverImprestId === imprest.id ? null : imprest.id
+                                    );
+                                  }}
+                                >
+                                  {movingImprestId === imprest.id ? '...' : '⋮'}
+                                </button>
+                                {movePopoverImprestId === imprest.id && (
+                                  <div
+                                    className="imprest-menu-popover"
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    <button
+                                      className="move-popover-item"
+                                      onClick={() => {
+                                        setMovePopoverImprestId(null);
+                                        setMoveModalImprest(imprest);
+                                      }}
+                                    >
+                                      ↔ Move to project
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <div className="imprest-block-amounts">
                             <span className="credit">{formatCurrency(allocated)} allocated</span>
@@ -299,17 +444,19 @@ const Projects = () => {
                             <span className={balance >= 0 ? 'positive' : 'negative'}>
                               {formatCurrency(balance)} balance
                             </span>
-                            <span className="txn-count">
-                              {txns.length} txn{txns.length !== 1 ? 's' : ''}
-                            </span>
+                            {imprestTransactions[imprest.id] && (
+                              <span className="txn-count">
+                                {txns.length} txn{txns.length !== 1 ? 's' : ''}
+                              </span>
+                            )}
                           </div>
                         </div>
 
                         {isExpanded && (
                           <>
-                            {imprest.user_tbls && imprest.user_tbls.length > 0 && (
+                            {imprest.assignedTo && imprest.assignedTo.length > 0 && (
                               <div className="imprest-assignees">
-                                Assigned to: {imprest.user_tbls.map(u => u.name).join(', ')}
+                                Assigned to: {imprest.assignedTo.map(u => u.name).join(', ')}
                               </div>
                             )}
 
@@ -330,6 +477,7 @@ const Projects = () => {
                                       <th>Unit Price</th>
                                       <th>VAT</th>
                                       <th>Total</th>
+                                      <th>Categories</th>
                                       <th>Receipt</th>
                                     </tr>
                                   </thead>
@@ -346,6 +494,42 @@ const Projects = () => {
                                         <td>{formatCurrency(txn.unitPrice)}</td>
                                         <td>{formatCurrency(txn.vat_charged)}</td>
                                         <td className="debit">{formatCurrency(txn.price)}</td>
+                                        <td className="categories-cell" onClick={e => e.stopPropagation()}>
+                                          <div className="categories-in-row">
+                                            {(txn.categories || []).map(cat => (
+                                              <span key={cat.id} className="category-tag">
+                                                {cat.cat_name}
+                                                <button
+                                                  className="remove-tag-btn"
+                                                  onClick={e => handleRemoveCategory(e, txn.id, cat.id, imprest.id)}
+                                                >×</button>
+                                              </span>
+                                            ))}
+                                            <button
+                                              className="add-category-btn"
+                                              onClick={e => {
+                                                e.stopPropagation();
+                                                setCategoryPopoverTxnId(categoryPopoverTxnId === txn.id ? null : txn.id);
+                                              }}
+                                            >+</button>
+                                          </div>
+                                          {categoryPopoverTxnId === txn.id && (
+                                            <div className="category-popover" onClick={e => e.stopPropagation()}>
+                                              {categories
+                                                .filter(c => !(txn.categories || []).some(tc => tc.id === c.id))
+                                                .map(cat => (
+                                                  <button
+                                                    key={cat.id}
+                                                    className="category-popover-item"
+                                                    onClick={e => handleAssignCategory(e, txn.id, cat.id, imprest.id)}
+                                                  >{cat.cat_name}</button>
+                                                ))}
+                                              {categories.filter(c => !(txn.categories || []).some(tc => tc.id === c.id)).length === 0 && (
+                                                <span className="category-popover-empty">All categories assigned</span>
+                                              )}
+                                            </div>
+                                          )}
+                                        </td>
                                         <td>
                                           {txn.images_id ? (
                                             <span className="has-receipt">📎</span>
@@ -358,7 +542,7 @@ const Projects = () => {
                                   </tbody>
                                   <tfoot>
                                     <tr>
-                                      <td colSpan="5" className="total-label">Subtotal:</td>
+                                      <td colSpan="6" className="total-label">Subtotal:</td>
                                       <td className="debit" colSpan="2">
                                         {formatCurrency(txns.reduce((s, t) => s + parseFloat(t.price || 0), 0))}
                                       </td>
@@ -418,6 +602,51 @@ const Projects = () => {
           </div>
         </div>
       </div>
+
+      {/* Move Imprest Modal */}
+      {moveModalImprest && (
+        <div className="modal-overlay" onClick={() => setMoveModalImprest(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Move Imprest</h3>
+              <button className="modal-close-btn" onClick={() => setMoveModalImprest(null)}>×</button>
+            </div>
+            <p className="modal-sub">Select a project to move <strong>{moveModalImprest.name}</strong> to:</p>
+            <div className="modal-project-list">
+              {projects.filter(p => p.id !== selectedProject.id).map(p => (
+                <button
+                  key={p.id}
+                  className="modal-project-item"
+                  disabled={movingImprestId === moveModalImprest.id}
+                  onClick={() => {
+                    handleMoveImprest(moveModalImprest.id, p.id);
+                    setMoveModalImprest(null);
+                  }}
+                >
+                  <span className="modal-project-name">{p.name}</span>
+                  <span className={`status-badge ${getStatusClass(p.status)}`}>{p.status}</span>
+                </button>
+              ))}
+              {projects.filter(p => p.id !== selectedProject.id).length === 0 && (
+                <p className="modal-empty">No other projects available.</p>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button
+                className="modal-unlink-btn"
+                disabled={movingImprestId === moveModalImprest.id}
+                onClick={() => {
+                  handleMoveImprest(moveModalImprest.id, null);
+                  setMoveModalImprest(null);
+                }}
+              >
+                Remove from project
+              </button>
+              <button className="modal-cancel-btn" onClick={() => setMoveModalImprest(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };

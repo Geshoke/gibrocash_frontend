@@ -44,6 +44,7 @@ export const authService = {
 export const userService = {
   getUsers: (userID) => api.get(`/getUsers/${userID}`),
   createUser: (userData) => api.post('/create_user', userData),
+  toggleSuperAdmin: (id, super_admin) => api.patch(`/users/${id}/super-admin`, { super_admin }),
 };
 
 // Imprest endpoints
@@ -52,6 +53,8 @@ export const imprestService = {
   getByUser: (userID) => api.get(`/getImprests/${userID}`),
   getAdminSummary: () => api.get('/adminAllImprestSummation'),
   getAdminTotals: () => api.get('/adminSummaries'),
+  assignUser: (imprestId, userId) => api.post(`/imprests/${imprestId}/users`, { userId }),
+  removeUser: (imprestId, userId) => api.delete(`/imprests/${imprestId}/users/${userId}`),
 };
 
 // Transaction endpoints
@@ -59,6 +62,15 @@ export const transactionService = {
   create: (data) => api.post('/create_transaction', data),
   getByImprest: (imprestID) => api.get(`/imprestAccount_trnsctns/${imprestID}`),
   delete: (transactionID) => api.delete(`/create_transaction/${transactionID}`),
+};
+
+// Category endpoints
+export const categoryService = {
+  getAll: () => api.get('/categories'),
+  create: (cat_name) => api.post('/categories', { cat_name }),
+  delete: (id) => api.delete(`/categories/${id}`),
+  assignToTransaction: (txnId, category_id) => api.post(`/transactions/${txnId}/categories`, { category_id }),
+  removeFromTransaction: (txnId, catId) => api.delete(`/transactions/${txnId}/categories/${catId}`),
 };
 
 // Proposal endpoints
@@ -73,6 +85,8 @@ export const proposalService = {
 export const projectService = {
   getAll: () => api.get('/projects'),
   getById: (id) => api.get(`/projects/${id}`),
+  assignImprest: (imprestId, projectId) =>
+    api.patch(`/imprest/${imprestId}/assign-project`, { project_id: projectId }),
 };
 
 // Image endpoints
