@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { projectService, imageService } from '../services/api';
+import { projectService, transactionService, imageService } from '../services/api';
 import Layout from '../components/Layout';
 import './Projects.css';
 
@@ -10,6 +10,9 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState('');
+  const [expandedImprest, setExpandedImprest] = useState(null);
+  const [imprestTransactions, setImprestTransactions] = useState({});
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [transactionImageUrl, setTransactionImageUrl] = useState(null);
   const [loadingImage, setLoadingImage] = useState(false);
@@ -35,6 +38,8 @@ const Projects = () => {
   const handleSelectProject = async (project) => {
     setSelectedProject(project);
     setProjectDetail(null);
+    setExpandedImprest(null);
+    setImprestTransactions({});
     setSelectedTransaction(null);
     setTransactionImageUrl(null);
 
@@ -46,6 +51,37 @@ const Projects = () => {
       console.error('Failed to load project detail:', err);
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  const handleImprestClick = async (imprestId) => {
+    if (expandedImprest === imprestId) {
+      setExpandedImprest(null);
+      setSelectedTransaction(null);
+      setTransactionImageUrl(null);
+      return;
+    }
+
+    setExpandedImprest(imprestId);
+    setSelectedTransaction(null);
+    setTransactionImageUrl(null);
+
+    // Only fetch if we haven't already loaded this imprest's transactions
+    if (imprestTransactions[imprestId]) return;
+
+    try {
+      setLoadingTransactions(true);
+      const response = await transactionService.getByImprest(imprestId);
+      const txns = response.data?.transactions?.rows
+        || response.data?.transactions
+        || response.data?.response
+        || [];
+      setImprestTransactions(prev => ({ ...prev, [imprestId]: txns }));
+    } catch (err) {
+      console.error('Failed to load transactions:', err);
+      setImprestTransactions(prev => ({ ...prev, [imprestId]: [] }));
+    } finally {
+      setLoadingTransactions(false);
     }
   };
 
@@ -236,124 +272,145 @@ const Projects = () => {
                   {(projectDetail.imprests || []).length === 0 ? (
                     <p className="no-data-inline">No imprests linked to this project.</p>
                   ) : (
-                    (projectDetail.imprests || []).map((imprest) => (
-                      <div key={imprest.id} className="imprest-block">
-                        <div className="imprest-block-header">
+                    (projectDetail.imprests || []).map((imprest) => {
+                      const isExpanded = expandedImprest === imprest.id;
+                      const txns = imprestTransactions[imprest.id] || imprest.transactions || [];
+                      const used = txns.reduce((sum, t) => sum + parseFloat(t.price || 0), 0);
+                      const allocated = parseFloat(imprest.amount) || 0;
+                      const balance = allocated - used;
+                      return (
+                      <div key={imprest.id} className={`imprest-block ${isExpanded ? 'expanded' : ''}`}>
+                        <div
+                          className="imprest-block-header imprest-block-clickable"
+                          onClick={() => handleImprestClick(imprest.id)}
+                        >
                           <div className="imprest-block-title">
+                            <span className={`imprest-chevron ${isExpanded ? 'open' : ''}`}>›</span>
                             <h4>{imprest.name}</h4>
                             <span className={`source-tag ${imprest.source?.replace(/\s+/g, '-').toLowerCase()}`}>
                               {imprest.source}
                             </span>
                           </div>
                           <div className="imprest-block-amounts">
-                            <span className="credit">{formatCurrency(imprest.amount)} allocated</span>
+                            <span className="credit">{formatCurrency(allocated)} allocated</span>
                             <span className="separator">·</span>
-                            <span className="debit">{formatCurrency(getImprestUsed(imprest))} used</span>
+                            <span className="debit">{formatCurrency(used)} used</span>
                             <span className="separator">·</span>
-                            <span className={getImprestBalance(imprest) >= 0 ? 'positive' : 'negative'}>
-                              {formatCurrency(getImprestBalance(imprest))} balance
+                            <span className={balance >= 0 ? 'positive' : 'negative'}>
+                              {formatCurrency(balance)} balance
+                            </span>
+                            <span className="txn-count">
+                              {txns.length} txn{txns.length !== 1 ? 's' : ''}
                             </span>
                           </div>
                         </div>
 
-                        {imprest.user_tbls && imprest.user_tbls.length > 0 && (
-                          <div className="imprest-assignees">
-                            Assigned to: {imprest.user_tbls.map(u => u.name).join(', ')}
-                          </div>
-                        )}
-
-                        {(imprest.transactions || []).length === 0 ? (
-                          <p className="no-data-inline">No transactions recorded.</p>
-                        ) : (
+                        {isExpanded && (
                           <>
-                            <table className="transactions-table compact">
-                              <thead>
-                                <tr>
-                                  <th>Date</th>
-                                  <th>Item</th>
-                                  <th>Qty</th>
-                                  <th>Unit Price</th>
-                                  <th>VAT</th>
-                                  <th>Total</th>
-                                  <th>Receipt</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {imprest.transactions.map((txn) => (
-                                  <tr
-                                    key={txn.id}
-                                    onClick={() => handleTransactionClick(txn)}
-                                    className={selectedTransaction?.id === txn.id ? 'selected' : ''}
-                                  >
-                                    <td>{formatDate(txn.createdAt)}</td>
-                                    <td>{txn.item}</td>
-                                    <td>{txn.quantity}</td>
-                                    <td>{formatCurrency(txn.unitPrice)}</td>
-                                    <td>{formatCurrency(txn.vat_charged)}</td>
-                                    <td className="debit">{formatCurrency(txn.price)}</td>
-                                    <td>
-                                      {txn.images_id ? (
-                                        <span className="has-receipt">📎</span>
-                                      ) : (
-                                        <span className="no-receipt">-</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                              <tfoot>
-                                <tr>
-                                  <td colSpan="5" className="total-label">Subtotal:</td>
-                                  <td className="debit" colSpan="2">
-                                    {formatCurrency(getImprestUsed(imprest))}
-                                  </td>
-                                </tr>
-                              </tfoot>
-                            </table>
-
-                            {selectedTransaction && imprest.transactions.some(t => t.id === selectedTransaction.id) && (
-                              <div className="transaction-image-preview">
-                                <div className="preview-header">
-                                  <h4>Receipt: {selectedTransaction.item}</h4>
-                                  <button
-                                    className="close-preview-btn"
-                                    onClick={() => {
-                                      setSelectedTransaction(null);
-                                      setTransactionImageUrl(null);
-                                    }}
-                                  >
-                                    &times;
-                                  </button>
-                                </div>
-                                <div className="preview-content">
-                                  {loadingImage ? (
-                                    <div className="loading-container small">
-                                      <div className="spinner"></div>
-                                    </div>
-                                  ) : transactionImageUrl ? (
-                                    transactionImageUrl.toLowerCase().endsWith('.pdf') ? (
-                                      <iframe
-                                        src={transactionImageUrl}
-                                        title={`Receipt for ${selectedTransaction.item}`}
-                                        className="pdf-preview"
-                                      />
-                                    ) : (
-                                      <img
-                                        src={transactionImageUrl}
-                                        alt={`Receipt for ${selectedTransaction.item}`}
-                                        onClick={() => window.open(transactionImageUrl, '_blank')}
-                                      />
-                                    )
-                                  ) : (
-                                    <p className="no-image-message">No receipt attached.</p>
-                                  )}
-                                </div>
+                            {imprest.user_tbls && imprest.user_tbls.length > 0 && (
+                              <div className="imprest-assignees">
+                                Assigned to: {imprest.user_tbls.map(u => u.name).join(', ')}
                               </div>
+                            )}
+
+                            {loadingTransactions && !imprestTransactions[imprest.id] ? (
+                              <div className="loading-container small">
+                                <div className="spinner"></div>
+                              </div>
+                            ) : txns.length === 0 ? (
+                              <p className="no-data-inline">No transactions recorded.</p>
+                            ) : (
+                              <>
+                                <table className="transactions-table compact">
+                                  <thead>
+                                    <tr>
+                                      <th>Date</th>
+                                      <th>Item</th>
+                                      <th>Qty</th>
+                                      <th>Unit Price</th>
+                                      <th>VAT</th>
+                                      <th>Total</th>
+                                      <th>Receipt</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {txns.map((txn) => (
+                                      <tr
+                                        key={txn.id}
+                                        onClick={() => handleTransactionClick(txn)}
+                                        className={selectedTransaction?.id === txn.id ? 'selected' : ''}
+                                      >
+                                        <td>{formatDate(txn.createdAt)}</td>
+                                        <td>{txn.item}</td>
+                                        <td>{txn.quantity}</td>
+                                        <td>{formatCurrency(txn.unitPrice)}</td>
+                                        <td>{formatCurrency(txn.vat_charged)}</td>
+                                        <td className="debit">{formatCurrency(txn.price)}</td>
+                                        <td>
+                                          {txn.images_id ? (
+                                            <span className="has-receipt">📎</span>
+                                          ) : (
+                                            <span className="no-receipt">-</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                  <tfoot>
+                                    <tr>
+                                      <td colSpan="5" className="total-label">Subtotal:</td>
+                                      <td className="debit" colSpan="2">
+                                        {formatCurrency(txns.reduce((s, t) => s + parseFloat(t.price || 0), 0))}
+                                      </td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+
+                                {selectedTransaction && txns.some(t => t.id === selectedTransaction.id) && (
+                                  <div className="transaction-image-preview">
+                                    <div className="preview-header">
+                                      <h4>Receipt: {selectedTransaction.item}</h4>
+                                      <button
+                                        className="close-preview-btn"
+                                        onClick={() => {
+                                          setSelectedTransaction(null);
+                                          setTransactionImageUrl(null);
+                                        }}
+                                      >
+                                        &times;
+                                      </button>
+                                    </div>
+                                    <div className="preview-content">
+                                      {loadingImage ? (
+                                        <div className="loading-container small">
+                                          <div className="spinner"></div>
+                                        </div>
+                                      ) : transactionImageUrl ? (
+                                        transactionImageUrl.toLowerCase().endsWith('.pdf') ? (
+                                          <iframe
+                                            src={transactionImageUrl}
+                                            title={`Receipt for ${selectedTransaction.item}`}
+                                            className="pdf-preview"
+                                          />
+                                        ) : (
+                                          <img
+                                            src={transactionImageUrl}
+                                            alt={`Receipt for ${selectedTransaction.item}`}
+                                            onClick={() => window.open(transactionImageUrl, '_blank')}
+                                          />
+                                        )
+                                      ) : (
+                                        <p className="no-image-message">No receipt attached.</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </>
                         )}
                       </div>
-                    ))
+                    )})
                   )}
                 </div>
               </>

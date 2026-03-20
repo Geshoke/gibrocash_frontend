@@ -1,5 +1,10 @@
 .projects-page {
   padding: 24px;
+  height: 100vh;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-header {
@@ -35,10 +40,17 @@
   display: grid;
   grid-template-columns: 340px 1fr;
   gap: 24px;
-  align-items: start;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
 }
 
 /* Projects list panel */
+.projects-list-panel {
+  overflow-y: auto;
+  height: 100%;
+}
+
 .projects-list-panel h2 {
   font-size: 1rem;
   color: #4a5568;
@@ -150,8 +162,11 @@
   background: white;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
-  min-height: 400px;
+  min-height: 0;
   padding: 24px;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .no-selection {
@@ -239,6 +254,36 @@
   gap: 12px;
   margin-bottom: 8px;
   flex-wrap: wrap;
+}
+
+.imprest-block-clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.imprest-block-clickable:hover .imprest-block-title h4 {
+  color: #3182ce;
+}
+
+.imprest-chevron {
+  font-size: 1.1rem;
+  color: #a0aec0;
+  transition: transform 0.2s;
+  display: inline-block;
+  line-height: 1;
+}
+
+.imprest-chevron.open {
+  transform: rotate(90deg);
+  color: #3182ce;
+}
+
+.txn-count {
+  font-size: 0.75rem;
+  color: #a0aec0;
+  background: #edf2f7;
+  padding: 1px 7px;
+  border-radius: 10px;
 }
 
 .imprest-block-title {
@@ -443,8 +488,21 @@
 }
 
 @media (max-width: 900px) {
+  .projects-page {
+    height: auto;
+    overflow: visible;
+  }
+
   .projects-layout {
     grid-template-columns: 1fr;
+    overflow: visible;
+    flex: none;
+  }
+
+  .projects-list-panel,
+  .project-detail-panel {
+    height: auto;
+    overflow: visible;
   }
 
   .detail-summary {
