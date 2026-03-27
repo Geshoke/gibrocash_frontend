@@ -60,6 +60,8 @@ export const imprestService = {
 // Transaction endpoints
 export const transactionService = {
   create: (data) => api.post('/create_transaction', data),
+  getAll: (userId, page = 1, limit = 50) =>
+    api.get('/transactions', { params: { ...(userId ? { user_id: userId } : {}), page, limit } }),
   getByImprest: (imprestID) => api.get(`/imprestAccount_trnsctns/${imprestID}`),
   delete: (transactionID) => api.delete(`/create_transaction/${transactionID}`),
 };
