@@ -753,6 +753,289 @@
 }
 .po-del-btn:hover { background: #fef2f2; }
 
+/* ── Transaction Payout view ──────────────────────────────────── */
+.po-txp-section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: -4px;
+}
+
+.po-txp-select {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #1e293b;
+  background: #f8fafc;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.po-txp-select:focus { outline: none; border-color: #3b82f6; background: white; }
+
+.po-txp-loading {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  padding: 10px 0;
+}
+
+/* Searchable imprest combobox */
+.po-txp-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #1e293b;
+  background: #f8fafc;
+  font-family: inherit;
+  transition: border-color 0.2s, background 0.2s;
+}
+.po-txp-search:focus { outline: none; border-color: #3b82f6; background: white; }
+
+.po-txp-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 200;
+}
+
+.po-txp-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.12s;
+}
+.po-txp-option:last-child  { border-bottom: none; }
+.po-txp-option:hover       { background: #f8fafc; }
+.po-txp-option.selected    { background: #eff6ff; }
+
+.po-txp-opt-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e293b;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.po-txp-opt-proj { color: #94a3b8; font-weight: 400; }
+
+.po-txp-opt-bal {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #16a34a;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.po-txp-no-results {
+  padding: 14px;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+/* ── PIN modal — wide variant ─────────────────────────────────── */
+.pin-modal.wide { max-width: 540px; }
+
+/* ── Step 2 transaction record form ───────────────────────────── */
+.po-txn-record-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.po-txn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* VAT toggle */
+.po-vat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.po-vat-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+  flex: 1;
+}
+
+.po-vat-toggle {
+  padding: 5px 16px;
+  border-radius: 20px;
+  border: 2px solid #e2e8f0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+.po-vat-toggle.on  { background: #dcfce7; border-color: #16a34a; color: #15803d; }
+.po-vat-toggle.off { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; }
+
+/* Totals breakdown */
+.po-txn-totals {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.po-txn-total-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.83rem;
+  color: #64748b;
+}
+.po-txn-total-row.vat  { color: #d97706; }
+.po-txn-total-row.grand {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #1e293b;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 6px;
+  margin-top: 2px;
+}
+.po-txn-total-row.grand.mismatch { color: #dc2626; }
+
+.po-txn-mismatch {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 5px 10px;
+  margin-top: 4px;
+}
+
+/* Receipt already uploaded note */
+.po-txn-receipt-note {
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  font-size: 0.83rem;
+  color: #15803d;
+}
+
+/* ── Action Required section ──────────────────────────────────── */
+.po-action-required {
+  margin: 0;
+  background: #fff7ed;
+  border-bottom: 1px solid #fed7aa;
+}
+
+.po-ar-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 0.82rem;
+  color: #c2410c;
+  border-bottom: 1px solid #fed7aa;
+}
+
+.po-ar-icon { font-size: 1rem; }
+
+.po-ar-count {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: #9a3412;
+}
+
+.po-ar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid #ffedd5;
+}
+.po-ar-item:last-child { border-bottom: none; }
+
+.po-ar-info { flex: 1; min-width: 0; }
+
+.po-ar-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.po-ar-meta {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.po-ar-amount {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1e293b;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.po-ar-retry-btn {
+  padding: 5px 14px;
+  background: #c2410c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.po-ar-retry-btn:hover { background: #9a3412; }
+
+/* ── Success banner ───────────────────────────────────────────── */
+.po-success-banner {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 12px 20px;
+  border-radius: 8px;
+  margin: 0 0 4px;
+}
+
+/* ── Nav count alert variant ──────────────────────────────────── */
+.po-nav-count.alert { background: #dc2626; }
+
 /* ── Responsive ────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .po-stats-row { grid-template-columns: repeat(2, 1fr); }

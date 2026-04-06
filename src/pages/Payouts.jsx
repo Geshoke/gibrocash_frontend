@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
-import { payoutService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { payoutService, imprestService, transactionService, imageService } from '../services/api';
 import './Payouts.css';
 
 // ── Constants ──────────────────────────────────────────────────
@@ -53,18 +54,32 @@ const STATUS_META = {
   cancelled:   { label: 'Cancelled',    cls: 'cancelled',  dot: '#6b7280' },
 };
 
-const TYPE_LABEL = { payroll: 'Payroll', single: 'Single Payment', b2b: 'B2B Payment' };
+const VAT_RATE = 0.16;
+
+const TYPE_LABEL = { payroll: 'Payroll', single: 'Single Payment', b2b: 'B2B Payment', txn_payout: 'Transaction Payout' };
 
 const NAV_ITEMS = [
-  { key: 'payroll',  icon: '💰', label: 'Payroll'        },
-  { key: 'single',   icon: '📤', label: 'Single Payment' },
-  { key: 'b2b',      icon: '🏦', label: 'B2B Payment'    },
-  { key: 'contacts', icon: '👥', label: 'Contacts'       },
-  { key: 'history',  icon: '📋', label: 'History'        },
+  { key: 'payroll',     icon: '💰', label: 'Payroll'             },
+  { key: 'single',      icon: '📤', label: 'Single Payment'      },
+  { key: 'b2b',         icon: '🏦', label: 'B2B Payment'         },
+  { key: 'txn_payout',  icon: '💳', label: 'Transaction Payout'  },
+  { key: 'contacts',    icon: '👥', label: 'Contacts'            },
+  { key: 'history',     icon: '📋', label: 'History'             },
 ];
+
+// ── Helpers ────────────────────────────────────────────────────
+const getTxnTotals = (form) => {
+  const qty      = parseFloat(form.quantity)  || 0;
+  const unit     = parseFloat(form.unitPrice) || 0;
+  const subtotal = qty * unit;
+  const vat      = form.vatEnabled ? parseFloat((subtotal * VAT_RATE).toFixed(2)) : 0;
+  const total    = parseFloat((subtotal + vat).toFixed(2));
+  return { subtotal, vat, total };
+};
 
 // ── Component ──────────────────────────────────────────────────
 const Payouts = () => {
+  const { user, canViewAllImprests } = useAuth();
   const [view, setView] = useState('history');
 
   // ── Contacts (persisted in localStorage) ────────────────────
@@ -105,6 +120,50 @@ const Payouts = () => {
   const [history, setHistory]   = useState([]);
   const [expanded, setExpanded] = useState(null);
 
+  // ── Transaction Payout ───────────────────────────────────────
+  const [imprests, setImprests]             = useState([]);
+  const [imprestsLoading, setImprestsLoading] = useState(false);
+  const [txnPayout, setTxnPayout]           = useState({ imprestId: '', contact: '', amount: '', description: '' });
+  const [imprestSearch, setImprestSearch]   = useState('');
+  const [imprestOpen, setImprestOpen]       = useState(false);
+  const imprestRef                          = useRef(null);
+  const [txnRequesting, setTxnRequesting]   = useState(false);
+  const [txnSuccess, setTxnSuccess]         = useState('');
+
+  // ── PIN modal step 2 — record transaction ───────────────────
+  const [modalStep, setModalStep]         = useState('pin'); // 'pin' | 'record'
+  const [txnForm, setTxnForm]             = useState({ item: '', quantity: '1', unitPrice: '', vatEnabled: false });
+  const [txnImageFile, setTxnImageFile]   = useState(null);
+  const [txnSaving, setTxnSaving]         = useState(false);
+  const [txnFormError, setTxnFormError]   = useState('');
+
+  // ── Failed imprest-transaction ledger (localStorage) ────────
+  const [failedTxns, setFailedTxns] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('gibrocash_failed_txns') || '[]'); }
+    catch { return []; }
+  });
+
+  // ── Retry modal ──────────────────────────────────────────────
+  const [retryEntry, setRetryEntry]       = useState(null);
+  const [retryForm, setRetryForm]         = useState({ item: '', quantity: '1', unitPrice: '', vatEnabled: false });
+  const [retryImageFile, setRetryImageFile] = useState(null);
+  const [retrying, setRetrying]           = useState(false);
+  const [retryError, setRetryError]       = useState('');
+
+  const openRetry = (entry) => {
+    const d = entry.transactionData;
+    // Back-calculate whether VAT was on: vat_charged > 0
+    setRetryForm({
+      item:       d.item       || '',
+      quantity:   String(d.itemQuantity || 1),
+      unitPrice:  String(d.unitPrice    || ''),
+      vatEnabled: (d.vat_charged || 0) > 0,
+    });
+    setRetryImageFile(null);
+    setRetryError('');
+    setRetryEntry(entry);
+  };
+
   const mapDbStatus = (s) => {
     if (s === 'success') return 'completed';
     if (s === 'pending') return 'processing';
@@ -138,6 +197,53 @@ const Payouts = () => {
   useEffect(() => {
     localStorage.setItem('gibrocash_contacts', JSON.stringify(contacts));
   }, [contacts]);
+
+  // Persist failed txn ledger
+  useEffect(() => {
+    localStorage.setItem('gibrocash_failed_txns', JSON.stringify(failedTxns));
+  }, [failedTxns]);
+
+  // Close imprest dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (imprestRef.current && !imprestRef.current.contains(e.target)) {
+        setImprestOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Load imprests when Transaction Payout view is opened
+  useEffect(() => {
+    if (view !== 'txn_payout') return;
+    if (imprests.length > 0) return;
+    setImprestsLoading(true);
+    const load = async () => {
+      try {
+        if (canViewAllImprests()) {
+          const { data } = await imprestService.getAdminSummary();
+          setImprests((data.response || []).map(imp => ({
+            id: imp.id,
+            name: imp.imprestName,
+            projectName: imp.projectName || imp.project?.name || null,
+            remaining: (imp.allocated || 0) - (imp.usedAmount || 0),
+          })));
+        } else {
+          const { data } = await imprestService.getByUser(user.id);
+          setImprests((data.response || []).map(imp => ({
+            id: imp.id,
+            name: imp.name,
+            projectName: imp.projectName || imp.project?.name || null,
+            remaining: (imp.amount || 0) - (imp.totalTransactionPrice || 0),
+          })));
+        }
+      } catch { /* silent */ } finally {
+        setImprestsLoading(false);
+      }
+    };
+    load();
+  }, [view]); // eslint-disable-line
 
   useEffect(() => { modalRef.current = modal; }, [modal]);
 
@@ -182,6 +288,18 @@ const Payouts = () => {
     const m = { ...modal };
     try {
       await payoutService.authorise(m.payoutId, pin);
+
+      // Transaction Payout: don't close — move to step 2 (record transaction)
+      if (m.type === 'txn_payout') {
+        clearInterval(timerRef.current);
+        setPin(''); setPinError('');
+        setTxnForm({ item: '', quantity: '1', unitPrice: '', vatEnabled: false });
+        setTxnImageFile(null); setTxnFormError('');
+        setModalStep('record');
+        setSubmitting(false);
+        return;
+      }
+
       clearInterval(timerRef.current);
       setModal(null); setPin('');
       fetchLedger();
@@ -196,7 +314,7 @@ const Payouts = () => {
       } else if (status === 410) {
         clearInterval(timerRef.current);
         setPinExpired(true);
-        pushHistory(m, 'expired');
+        // PIN expired — no local history push needed; ledger refreshed on close
       } else {
         setPinError('Something went wrong. Please try again.');
       }
@@ -376,6 +494,190 @@ const Payouts = () => {
     ? b2b.paybillNumber && b2b.accountNumber && b2b.amount
     : b2b.tillNumber && b2b.amount;
 
+  // ── Transaction Payout handlers ──────────────────────────────
+  const submitTxnPayout = async () => {
+    const { imprestId, contact, amount, description } = txnPayout;
+    if (!imprestId || !contact.trim() || !amount || txnRequesting) return;
+    const selectedImprest = imprests.find(i => String(i.id) === String(imprestId));
+    const label  = `Payment to ${contact}`;
+    const amt    = parseFloat(amount) || 0;
+    const payload = { phoneNumber: normalizePhone(contact), amount: amt, remarks: description || 'Transaction Payout' };
+    setTxnRequesting(true);
+    try {
+      const { data } = await payoutService.request({ type: 'single', payload, label, amount: amt });
+      setModalStep('pin');
+      openModal('txn_payout', label, amt, { ...txnPayout, imprest: selectedImprest }, data.payoutId);
+    } catch {
+      alert('Failed to initiate payout. Please try again.');
+    } finally {
+      setTxnRequesting(false);
+    }
+  };
+
+  const cancelRecord = () => {
+    if (!window.confirm('The payout succeeded. Cancel transaction recording? It will be saved to Action Required for retry.')) return;
+    const m = modal;
+    const { vat, total } = getTxnTotals(txnForm);
+    const entry = {
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+      payoutLabel: m.label,
+      payoutAmount: m.amount,
+      imprestName: m.payload.imprest.name,
+      imprestProject: m.payload.imprest.projectName || null,
+      transactionData: {
+        imprestAccount_id: m.payload.imprest.id,
+        item: txnForm.item.trim(),
+        itemQuantity: parseFloat(txnForm.quantity) || 1,
+        unitPrice: parseFloat(txnForm.unitPrice) || 0,
+        Total_amount: total,
+        userID: user.id,
+        vat_charged: vat,
+        url_image: null,
+      },
+    };
+    setFailedTxns(prev => [entry, ...prev]);
+    setModal(null);
+    setModalStep('pin');
+  };
+
+  const handleSaveTxnRecord = async () => {
+    if (txnSaving) return;
+    const { item, quantity, unitPrice } = txnForm;
+    const { vat, total } = getTxnTotals(txnForm);
+    const imprest = modal?.payload?.imprest;
+
+    if (!item.trim() || !quantity || !unitPrice) {
+      setTxnFormError('Please fill in all required fields.');
+      return;
+    }
+    if (!txnImageFile) {
+      setTxnFormError('Please attach a receipt image.');
+      return;
+    }
+
+    setTxnSaving(true);
+    setTxnFormError('');
+
+    // 1. Upload receipt
+    let imageFilename = null;
+    try {
+      const fd = new FormData();
+      fd.append('file', txnImageFile);
+      const { data } = await imageService.upload(fd);
+      imageFilename = data.file;
+    } catch {
+      setTxnFormError('Receipt upload failed. Please try again.');
+      setTxnSaving(false);
+      return;
+    }
+
+    // 2. Create transaction
+    const txnData = {
+      imprestAccount_id: imprest.id,
+      item:              item.trim(),
+      itemQuantity:      parseFloat(quantity),
+      unitPrice:         parseFloat(unitPrice),
+      Total_amount:      total,
+      userID:            user.id,
+      vat_charged:       vat,
+      url_image:         imageFilename,
+    };
+
+    try {
+      await transactionService.create(txnData);
+      setModal(null);
+      setModalStep('pin');
+      setTxnPayout({ imprestId: '', contact: '', amount: '', description: '' });
+      setTxnForm({ item: '', quantity: '1', unitPrice: '', vatEnabled: false });
+      setTxnImageFile(null);
+      setTxnSuccess('Payout completed and transaction recorded successfully.');
+      setTimeout(() => setTxnSuccess(''), 6000);
+      fetchLedger();
+    } catch {
+      // Save to Action Required ledger
+      const entry = {
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        payoutLabel: modal.label,
+        payoutAmount: modal.amount,
+        imprestName: imprest.name,
+        imprestProject: imprest.projectName || null,
+        transactionData: txnData,
+      };
+      setFailedTxns(prev => [entry, ...prev]);
+      setModal(null);
+      setModalStep('pin');
+      alert('Payout succeeded but transaction recording failed. Check "Action Required" in the ledger to retry.');
+      fetchLedger();
+    } finally {
+      setTxnSaving(false);
+    }
+  };
+
+  const retryFailedTxn = async () => {
+    if (retrying || !retryEntry) return;
+
+    const { item, quantity, unitPrice } = retryForm;
+    const { vat, total } = getTxnTotals(retryForm);
+
+    if (!item.trim() || !quantity || !unitPrice) {
+      setRetryError('Please fill in all required fields.');
+      return;
+    }
+
+    // Need image if not already uploaded
+    const existingUrl = retryEntry.transactionData.url_image;
+    if (!existingUrl && !retryImageFile) {
+      setRetryError('Please attach a receipt image.');
+      return;
+    }
+
+    setRetrying(true);
+    setRetryError('');
+
+    let imageFilename = existingUrl || null;
+
+    if (!imageFilename) {
+      try {
+        const fd = new FormData();
+        fd.append('file', retryImageFile);
+        const { data } = await imageService.upload(fd);
+        imageFilename = data.file;
+      } catch {
+        setRetryError('Receipt upload failed. Please try again.');
+        setRetrying(false);
+        return;
+      }
+    }
+
+    let txnData = {
+      imprestAccount_id: retryEntry.transactionData.imprestAccount_id,
+      item:              item.trim(),
+      itemQuantity:      parseFloat(quantity),
+      unitPrice:         parseFloat(unitPrice),
+      Total_amount:      total,
+      userID:            retryEntry.transactionData.userID,
+      vat_charged:       vat,
+      url_image:         imageFilename,
+    };
+
+    try {
+      await transactionService.create(txnData);
+      setFailedTxns(prev => prev.filter(f => f.id !== retryEntry.id));
+      setRetryEntry(null);
+      setRetryImageFile(null);
+      setTxnSuccess('Transaction recorded successfully.');
+      setTimeout(() => setTxnSuccess(''), 6000);
+    } catch {
+      setRetryError('Transaction recording failed. Please try again.');
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const txnPayoutReady = txnPayout.imprestId && txnPayout.contact.trim() && txnPayout.amount;
+
   // ── Render ───────────────────────────────────────────────────
   return (
     <Layout>
@@ -446,6 +748,12 @@ const Payouts = () => {
           <div className="po-content-panel">
 
             {/* ── History ─────────────────────────────────── */}
+            {txnSuccess && (
+              <div className="po-success-banner">
+                <span>✓</span> {txnSuccess}
+              </div>
+            )}
+
             {view === 'history' && (
               <>
                 <div className="po-panel-header">
@@ -454,6 +762,34 @@ const Payouts = () => {
                     <p>Real-time payout activity</p>
                   </div>
                 </div>
+
+                {/* ── Action Required ───────────────────────── */}
+                {failedTxns.length > 0 && (
+                  <div className="po-action-required">
+                    <div className="po-ar-header">
+                      <span className="po-ar-icon">⚠</span>
+                      <strong>Action Required</strong>
+                      <span className="po-ar-count">{failedTxns.length} failed imprest transaction{failedTxns.length > 1 ? 's' : ''}</span>
+                    </div>
+                    {failedTxns.map(entry => (
+                      <div key={entry.id} className="po-ar-item">
+                        <div className="po-ar-info">
+                          <div className="po-ar-label">{entry.payoutLabel}</div>
+                          <div className="po-ar-meta">
+                            {entry.imprestName}{entry.imprestProject ? ` · ${entry.imprestProject}` : ''} · {fmtDate(entry.createdAt)}
+                          </div>
+                        </div>
+                        <div className="po-ar-amount">{fmtCur(entry.payoutAmount)}</div>
+                        <button
+                          className="po-ar-retry-btn"
+                          onClick={() => openRetry(entry)}
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {history.length === 0 ? (
                   <div className="po-empty">
@@ -767,6 +1103,126 @@ const Payouts = () => {
               </>
             )}
 
+            {/* ── Transaction Payout ──────────────────────── */}
+            {view === 'txn_payout' && (
+              <>
+                <div className="po-panel-header">
+                  <div>
+                    <h2>Transaction Payout</h2>
+                    <p>Send a payment to an individual and record it against an imprest. Director PIN required.</p>
+                  </div>
+                </div>
+                <div className="po-form narrow">
+                  <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
+
+                  {/* Step 1 — Select imprest */}
+                  <div className="po-txp-section-label">Step 1 — Select Imprest</div>
+                  <div className="po-field" ref={imprestRef} style={{ position: 'relative' }}>
+                    <label>Imprest Account</label>
+                    {imprestsLoading ? (
+                      <div className="po-txp-loading">Loading imprests…</div>
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          className="po-txp-search"
+                          placeholder="Search imprest…"
+                          value={imprestSearch}
+                          onFocus={() => setImprestOpen(true)}
+                          onChange={e => {
+                            setImprestSearch(e.target.value);
+                            setImprestOpen(true);
+                            // clear selection when user starts typing a new search
+                            if (txnPayout.imprestId) setTxnPayout(p => ({ ...p, imprestId: '' }));
+                          }}
+                        />
+                        {imprestOpen && (
+                          <div className="po-txp-dropdown">
+                            {imprests
+                              .filter(imp => {
+                                const q = imprestSearch.toLowerCase();
+                                return (
+                                  imp.name.toLowerCase().includes(q) ||
+                                  (imp.projectName || '').toLowerCase().includes(q)
+                                );
+                              })
+                              .map(imp => (
+                                <div
+                                  key={imp.id}
+                                  className={`po-txp-option${String(txnPayout.imprestId) === String(imp.id) ? ' selected' : ''}`}
+                                  onMouseDown={() => {
+                                    setTxnPayout(p => ({ ...p, imprestId: imp.id }));
+                                    setImprestSearch(`${imp.name}${imp.projectName ? ` · ${imp.projectName}` : ''}`);
+                                    setImprestOpen(false);
+                                  }}
+                                >
+                                  <div className="po-txp-opt-name">{imp.name}{imp.projectName ? <span className="po-txp-opt-proj"> · {imp.projectName}</span> : ''}</div>
+                                  <div className="po-txp-opt-bal">{fmtCur(imp.remaining)}</div>
+                                </div>
+                              ))
+                            }
+                            {imprests.filter(imp => {
+                              const q = imprestSearch.toLowerCase();
+                              return imp.name.toLowerCase().includes(q) || (imp.projectName || '').toLowerCase().includes(q);
+                            }).length === 0 && (
+                              <div className="po-txp-no-results">No imprests match your search</div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Step 2 — Payment details */}
+                  <div className="po-txp-section-label">Step 2 — Payment Details</div>
+                  <div className="po-field">
+                    <label>Recipient Phone Number</label>
+                    <input
+                      type="text"
+                      value={txnPayout.contact}
+                      onChange={e => setTxnPayout(p => ({ ...p, contact: e.target.value }))}
+                      placeholder="e.g. 0712345678"
+                    />
+                  </div>
+                  <div className="po-field">
+                    <label>Amount (KES)</label>
+                    <input
+                      type="number"
+                      value={txnPayout.amount}
+                      onChange={e => setTxnPayout(p => ({ ...p, amount: e.target.value }))}
+                      placeholder="0.00" min="0" step="0.01"
+                    />
+                  </div>
+                  <div className="po-field">
+                    <label>Description / Reason</label>
+                    <textarea
+                      value={txnPayout.description}
+                      onChange={e => setTxnPayout(p => ({ ...p, description: e.target.value }))}
+                      placeholder="e.g. Payment for plumbing services"
+                      rows={3}
+                    />
+                  </div>
+
+                  {txnPayout.contact && txnPayout.amount && txnPayout.imprestId && (
+                    <div className="po-preview">
+                      Sending <strong>{fmtCur(txnPayout.amount)}</strong> to <strong>{txnPayout.contact}</strong>
+                      {' '}— will be recorded in <strong>{imprests.find(i => String(i.id) === String(txnPayout.imprestId))?.name}</strong>
+                    </div>
+                  )}
+
+                  <div className="po-form-footer">
+                    <button
+                      className="po-initiate-btn"
+                      onClick={submitTxnPayout}
+                      disabled={!txnPayoutReady || txnRequesting}
+                    >
+                      {txnRequesting ? 'Sending SMS…' : 'Initiate Transaction Payout'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
             {/* ── Contacts ─────────────────────────────────── */}
             {view === 'contacts' && (
               <>
@@ -880,7 +1336,10 @@ const Payouts = () => {
                 {item.key === 'contacts' && contacts.length > 0 && (
                   <span className="po-nav-count">{contacts.length}</span>
                 )}
-                {(item.key === 'single' || item.key === 'payroll' || item.key === 'b2b' || item.key === 'contacts') && (
+                {item.key === 'txn_payout' && failedTxns.length > 0 && (
+                  <span className="po-nav-count alert">{failedTxns.length}</span>
+                )}
+                {(item.key === 'single' || item.key === 'payroll' || item.key === 'b2b' || item.key === 'txn_payout' || item.key === 'contacts') && (
                   <span className="po-nav-arrow">›</span>
                 )}
               </button>
@@ -912,14 +1371,124 @@ const Payouts = () => {
 
       {/* ── PIN Modal ───────────────────────────────────────── */}
       {modal && (
-        <div className="pin-overlay" onClick={e => e.target === e.currentTarget && !pinExpired && cancelModal()}>
-          <div className="pin-modal">
+        <div className="pin-overlay" onClick={e => {
+          if (e.target !== e.currentTarget) return;
+          if (modalStep === 'record') return; // must use Cancel or Save buttons
+          if (!pinExpired) cancelModal();
+        }}>
+          <div className={`pin-modal${modalStep === 'record' ? ' wide' : ''}`}>
             <div className="pin-modal-head">
-              <div className="pin-lock-icon">{pinExpired ? '⏰' : '🔐'}</div>
-              <h2>{pinExpired ? 'Approval Window Closed' : 'Director Approval Required'}</h2>
+              <div className="pin-lock-icon">{modalStep === 'record' ? '🧾' : pinExpired ? '⏰' : '🔐'}</div>
+              <h2>{modalStep === 'record' ? 'Record Transaction' : pinExpired ? 'Approval Window Closed' : 'Director Approval Required'}</h2>
             </div>
             <div className="pin-modal-body">
-              {!pinExpired ? (
+
+              {/* ── Step 2: Transaction record form ──────── */}
+              {modalStep === 'record' && (
+                <>
+                  <p className="pin-desc">
+                    Payout authorised. Fill in the transaction details and attach the receipt to record it in the imprest.
+                  </p>
+                  <div className="po-txn-record-form">
+                    <div className="po-field">
+                      <label>Item / Description *</label>
+                      <input
+                        type="text"
+                        value={txnForm.item}
+                        onChange={e => setTxnForm(p => ({ ...p, item: e.target.value }))}
+                        placeholder="e.g. Plumbing materials"
+                      />
+                    </div>
+                    <div className="po-txn-row">
+                      <div className="po-field">
+                        <label>Quantity *</label>
+                        <input
+                          type="number"
+                          value={txnForm.quantity}
+                          onChange={e => setTxnForm(p => ({ ...p, quantity: e.target.value }))}
+                          min="1" step="1" placeholder="1"
+                        />
+                      </div>
+                      <div className="po-field">
+                        <label>Unit Price (KES) *</label>
+                        <input
+                          type="number"
+                          value={txnForm.unitPrice}
+                          onChange={e => setTxnForm(p => ({ ...p, unitPrice: e.target.value }))}
+                          min="0" step="0.01" placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+
+                    {/* VAT toggle */}
+                    <div className="po-vat-row">
+                      <span className="po-vat-label">VAT (16%)</span>
+                      <button
+                        className={`po-vat-toggle ${txnForm.vatEnabled ? 'on' : 'off'}`}
+                        onClick={() => setTxnForm(p => ({ ...p, vatEnabled: !p.vatEnabled }))}
+                        type="button"
+                      >
+                        {txnForm.vatEnabled ? 'ON' : 'OFF'}
+                      </button>
+                    </div>
+
+                    {/* Totals breakdown */}
+                    {(() => {
+                      const { subtotal, vat, total } = getTxnTotals(txnForm);
+                      const payoutAmt = modal?.amount || 0;
+                      const mismatch  = txnForm.quantity && txnForm.unitPrice && total !== payoutAmt;
+                      return (
+                        <div className="po-txn-totals">
+                          <div className="po-txn-total-row">
+                            <span>Subtotal</span><span>{fmtCur(subtotal)}</span>
+                          </div>
+                          {txnForm.vatEnabled && (
+                            <div className="po-txn-total-row vat">
+                              <span>VAT (16%)</span><span>{fmtCur(vat)}</span>
+                            </div>
+                          )}
+                          <div className={`po-txn-total-row grand${mismatch ? ' mismatch' : ''}`}>
+                            <span>Total</span><span>{fmtCur(total)}</span>
+                          </div>
+                          {mismatch && (
+                            <div className="po-txn-mismatch">
+                              Payout was {fmtCur(payoutAmt)} — total does not match
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Receipt upload */}
+                    <div className="po-field">
+                      <label>Receipt Image *</label>
+                      <label className={`po-drop-zone ${txnImageFile ? 'loaded' : ''}`}>
+                        <span className="po-drop-icon">{txnImageFile ? '✅' : '🧾'}</span>
+                        <span className="po-drop-main">{txnImageFile ? txnImageFile.name : 'Click to attach receipt'}</span>
+                        <span className="po-drop-hint">JPG, PNG, PDF accepted</span>
+                        <input type="file" accept="image/*,.pdf" onChange={e => setTxnImageFile(e.target.files[0] || null)} />
+                      </label>
+                    </div>
+
+                    {txnFormError && <p className="pin-error" style={{ textAlign: 'left' }}>{txnFormError}</p>}
+                  </div>
+
+                  <div className="pin-modal-actions" style={{ marginTop: 20 }}>
+                    <button className="pin-cancel-btn" onClick={cancelRecord} disabled={txnSaving}>
+                      Cancel
+                    </button>
+                    <button
+                      className="pin-auth-btn"
+                      onClick={handleSaveTxnRecord}
+                      disabled={txnSaving}
+                    >
+                      {txnSaving ? 'Saving…' : 'Save Transaction'}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {modalStep === 'pin' && !pinExpired && (
                 <>
                   <p className="pin-desc">
                     An SMS with a <strong>5-digit PIN</strong> has been sent to all directors.
@@ -946,6 +1515,12 @@ const Payouts = () => {
                         <span className="psr-val">{modal.payload.payloads.length} employees</span>
                       </div>
                     )}
+                    {modal.type === 'txn_payout' && modal.payload?.imprest && (
+                      <div className="pin-summary-row">
+                        <span className="psr-label">Imprest</span>
+                        <span className="psr-val">{modal.payload.imprest.name}</span>
+                      </div>
+                    )}
                   </div>
                   <div className={`pin-timer-bar ${timeLeft <= 60 ? 'urgent' : ''}`}>
                     <span>⏱</span><span>PIN expires in</span>
@@ -964,13 +1539,145 @@ const Payouts = () => {
                     </button>
                   </div>
                 </>
-              ) : (
+              )}
+              {modalStep === 'pin' && pinExpired && (
                 <div className="pin-expired-body">
                   <p>The 10-minute approval window has closed. This payment has been cancelled.</p>
                   <p>Please initiate a new payment if you still wish to proceed.</p>
-                  <button className="pin-cancel-btn" onClick={() => { setModal(null); setPin(''); }}>Close</button>
+                  <button className="pin-cancel-btn" onClick={() => { setModal(null); setPin(''); setModalStep('pin'); }}>Close</button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Retry Modal (Action Required) ──────────────────── */}
+      {retryEntry && (
+        <div className="pin-overlay" onClick={e => e.target === e.currentTarget && !retrying && setRetryEntry(null)}>
+          <div className="pin-modal wide">
+            <div className="pin-modal-head">
+              <div className="pin-lock-icon">🔄</div>
+              <h2>Retry Transaction Recording</h2>
+            </div>
+            <div className="pin-modal-body">
+              {/* Payout context — read only */}
+              <div className="pin-payout-summary" style={{ marginBottom: 16 }}>
+                <div className="pin-summary-row">
+                  <span className="psr-label">Payout</span>
+                  <span className="psr-val">{retryEntry.payoutLabel}</span>
+                </div>
+                <div className="pin-summary-row">
+                  <span className="psr-label">Imprest</span>
+                  <span className="psr-val">{retryEntry.imprestName}{retryEntry.imprestProject ? ` · ${retryEntry.imprestProject}` : ''}</span>
+                </div>
+                <div className="pin-summary-row">
+                  <span className="psr-label">Payout Amount</span>
+                  <span className="psr-amount">{fmtCur(retryEntry.payoutAmount)}</span>
+                </div>
+              </div>
+
+              {/* Editable transaction details */}
+              <div className="po-txn-record-form">
+                <div className="po-field">
+                  <label>Item / Description *</label>
+                  <input
+                    type="text"
+                    value={retryForm.item}
+                    onChange={e => setRetryForm(p => ({ ...p, item: e.target.value }))}
+                    placeholder="e.g. Plumbing materials"
+                  />
+                </div>
+                <div className="po-txn-row">
+                  <div className="po-field">
+                    <label>Quantity *</label>
+                    <input
+                      type="number"
+                      value={retryForm.quantity}
+                      onChange={e => setRetryForm(p => ({ ...p, quantity: e.target.value }))}
+                      min="1" step="1" placeholder="1"
+                    />
+                  </div>
+                  <div className="po-field">
+                    <label>Unit Price (KES) *</label>
+                    <input
+                      type="number"
+                      value={retryForm.unitPrice}
+                      onChange={e => setRetryForm(p => ({ ...p, unitPrice: e.target.value }))}
+                      min="0" step="0.01" placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div className="po-vat-row">
+                  <span className="po-vat-label">VAT (16%)</span>
+                  <button
+                    className={`po-vat-toggle ${retryForm.vatEnabled ? 'on' : 'off'}`}
+                    onClick={() => setRetryForm(p => ({ ...p, vatEnabled: !p.vatEnabled }))}
+                    type="button"
+                  >
+                    {retryForm.vatEnabled ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+
+                {(() => {
+                  const { subtotal, vat, total } = getTxnTotals(retryForm);
+                  const payoutAmt = retryEntry.payoutAmount || 0;
+                  const mismatch  = retryForm.quantity && retryForm.unitPrice && total !== payoutAmt;
+                  return (
+                    <div className="po-txn-totals">
+                      <div className="po-txn-total-row">
+                        <span>Subtotal</span><span>{fmtCur(subtotal)}</span>
+                      </div>
+                      {retryForm.vatEnabled && (
+                        <div className="po-txn-total-row vat">
+                          <span>VAT (16%)</span><span>{fmtCur(vat)}</span>
+                        </div>
+                      )}
+                      <div className={`po-txn-total-row grand${mismatch ? ' mismatch' : ''}`}>
+                        <span>Total</span><span>{fmtCur(total)}</span>
+                      </div>
+                      {mismatch && (
+                        <div className="po-txn-mismatch">
+                          Payout was {fmtCur(payoutAmt)} — total does not match
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {!retryEntry.transactionData.url_image ? (
+                  <div className="po-field">
+                    <label>Receipt Image *</label>
+                    <label className={`po-drop-zone ${retryImageFile ? 'loaded' : ''}`}>
+                      <span className="po-drop-icon">{retryImageFile ? '✅' : '🧾'}</span>
+                      <span className="po-drop-main">{retryImageFile ? retryImageFile.name : 'Click to attach receipt'}</span>
+                      <span className="po-drop-hint">JPG, PNG, PDF accepted</span>
+                      <input type="file" accept="image/*,.pdf" onChange={e => setRetryImageFile(e.target.files[0] || null)} />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="po-txn-receipt-note">Receipt already uploaded. Click Retry to record the transaction.</div>
+                )}
+
+                {retryError && <p className="pin-error" style={{ textAlign: 'left' }}>{retryError}</p>}
+              </div>
+
+              <div className="pin-modal-actions" style={{ marginTop: 20 }}>
+                <button
+                  className="pin-cancel-btn"
+                  onClick={() => { setRetryEntry(null); setRetryImageFile(null); setRetryError(''); }}
+                  disabled={retrying}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="pin-auth-btn"
+                  onClick={retryFailedTxn}
+                  disabled={retrying}
+                >
+                  {retrying ? 'Recording…' : 'Retry Transaction'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

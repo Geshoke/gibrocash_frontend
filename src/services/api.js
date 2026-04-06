@@ -43,8 +43,11 @@ export const authService = {
 // User endpoints
 export const userService = {
   getUsers: (userID) => api.get(`/getUsers/${userID}`),
+  getById: (id) => api.get(`/users/${id}`),
   createUser: (userData) => api.post('/create_user', userData),
+  togglePayout: (id, payout) => api.patch(`/users/${id}/payout`, { payout }),
   toggleSuperAdmin: (id, super_admin) => api.patch(`/users/${id}/super-admin`, { super_admin }),
+  toggleViewAllImprests: (id, view_all_imprests) => api.patch(`/users/${id}/view-all-imprests`, { view_all_imprests }),
 };
 
 // Imprest endpoints
