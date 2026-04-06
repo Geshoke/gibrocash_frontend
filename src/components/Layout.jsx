@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
+import APP_VERSION from '../version';
 import './Layout.css';
 
 const Layout = ({ children }) => {
@@ -61,6 +62,7 @@ const Layout = ({ children }) => {
           <button onClick={logout} className="logout-button">
             Logout
           </button>
+          <span className="app-version">v{APP_VERSION}</span>
         </div>
       </aside>
 

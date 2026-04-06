@@ -79,7 +79,7 @@ export const categoryService = {
 export const proposalService = {
   create: (data) => api.post('/imprestProposal', data),
   updateStatus: (data) => api.patch('/imprestProposal', data),
-  getAll: () => api.get('/proposals'),
+  getAll: (params) => api.get('/proposals', { params }),
   getById: (id) => api.get(`/proposals/${id}`),
 };
 

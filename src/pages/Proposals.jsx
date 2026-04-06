@@ -1,24 +1,62 @@
 import { useState, useEffect } from 'react';
-import { proposalService } from '../services/api';
+import { proposalService, userService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import './Proposals.css';
 
+const PAGE_LIMIT = 10;
+
+const emptyFilters = { dateFrom: '', dateTo: '', item: '', userId: '' };
+
 const Proposals = () => {
+  const { user, isAdmin } = useAuth();
+  const admin = isAdmin();
+
   const [proposals, setProposals] = useState([]);
   const [selectedProposal, setSelectedProposal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [users, setUsers] = useState([]);
+
+  // Staged inputs — not sent until Apply is clicked
+  const [filterInputs, setFilterInputs] = useState(emptyFilters);
+  // Last-applied filters — used for page changes
+  const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
+
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
-    fetchProposals();
+    fetchProposals(1, emptyFilters);
+    if (admin) fetchUsers();
   }, []);
 
-  const fetchProposals = async () => {
+  const fetchUsers = async () => {
+    try {
+      const res = await userService.getUsers(user.id);
+      setUsers(res.data.response || []);
+    } catch (err) {
+      console.error('Failed to load users:', err);
+    }
+  };
+
+  const fetchProposals = async (targetPage, filters) => {
     try {
       setLoading(true);
       setError('');
-      const response = await proposalService.getAll();
-      setProposals(response.data.proposals || []);
+      const params = { page: targetPage, limit: PAGE_LIMIT };
+      if (filters.dateFrom) params.dateFrom = filters.dateFrom;
+      if (filters.dateTo) params.dateTo = filters.dateTo;
+      if (filters.item) params.item = filters.item;
+      if (filters.userId) params.userId = filters.userId;
+
+      const response = await proposalService.getAll(params);
+      const data = response.data;
+      setProposals(data.proposals || []);
+      setPage(targetPage);
+
+      const total = data.total ?? data.count ?? data.proposals?.length ?? 0;
+      setTotalPages(Math.max(1, Math.ceil(total / PAGE_LIMIT)));
     } catch (err) {
       setError('Failed to load proposals.');
       console.error(err);
@@ -27,29 +65,39 @@ const Proposals = () => {
     }
   };
 
+  const handleApplyFilters = () => {
+    setAppliedFilters(filterInputs);
+    setSelectedProposal(null);
+    fetchProposals(1, filterInputs);
+  };
+
+  const handleClearFilters = () => {
+    setFilterInputs(emptyFilters);
+    setAppliedFilters(emptyFilters);
+    setSelectedProposal(null);
+    fetchProposals(1, emptyFilters);
+  };
+
+  const handlePageChange = (newPage) => {
+    setSelectedProposal(null);
+    fetchProposals(newPage, appliedFilters);
+  };
+
   const handleViewDetails = async (proposalId) => {
     try {
       const response = await proposalService.getById(proposalId);
-      setSelectedProposal(response.data.proposal);
+      const proposal = response.data.proposal ?? response.data;
+      setSelectedProposal(proposal);
     } catch (err) {
       console.error('Failed to load proposal details:', err);
     }
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-KE', {
-      style: 'currency',
-      currency: 'KES',
-    }).format(amount || 0);
-  };
+  const formatCurrency = (amount) =>
+    new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount || 0);
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-KE', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
+  const formatDate = (dateString) =>
+    new Date(dateString).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' });
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
@@ -60,7 +108,9 @@ const Proposals = () => {
     }
   };
 
-  if (loading) {
+  const hasActiveFilters = Object.values(appliedFilters).some(Boolean);
+
+  if (loading && proposals.length === 0) {
     return (
       <Layout>
         <div className="loading-container">
@@ -86,31 +136,121 @@ const Proposals = () => {
         <div className="proposals-content">
           <div className="proposals-list-panel">
             <h2>All Proposals</h2>
-            {proposals.length === 0 ? (
+
+            {/* Filter Bar */}
+            <div className="filter-bar">
+              <div className="filter-row">
+                <div className="filter-group">
+                  <label>From</label>
+                  <input
+                    type="date"
+                    value={filterInputs.dateFrom}
+                    onChange={(e) => setFilterInputs((p) => ({ ...p, dateFrom: e.target.value }))}
+                  />
+                </div>
+                <div className="filter-group">
+                  <label>To</label>
+                  <input
+                    type="date"
+                    value={filterInputs.dateTo}
+                    onChange={(e) => setFilterInputs((p) => ({ ...p, dateTo: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="filter-row">
+                <div className="filter-group full-width">
+                  <label>Search by Item</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Security, Logistics..."
+                    value={filterInputs.item}
+                    onChange={(e) => setFilterInputs((p) => ({ ...p, item: e.target.value }))}
+                    onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
+                  />
+                </div>
+              </div>
+
+              {admin && (
+                <div className="filter-row">
+                  <div className="filter-group full-width">
+                    <label>Raised By</label>
+                    <select
+                      value={filterInputs.userId}
+                      onChange={(e) => setFilterInputs((p) => ({ ...p, userId: e.target.value }))}
+                    >
+                      <option value="">All staff</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="filter-actions">
+                <button className="apply-filter-btn" onClick={handleApplyFilters}>
+                  Apply
+                </button>
+                {hasActiveFilters && (
+                  <button className="clear-filter-btn" onClick={handleClearFilters}>
+                    Clear All
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="list-loading">
+                <div className="spinner small"></div>
+              </div>
+            ) : proposals.length === 0 ? (
               <div className="no-data">
-                <p>No proposals found.</p>
+                <p>{hasActiveFilters ? 'No proposals match your filters.' : 'No proposals found.'}</p>
               </div>
             ) : (
-              <div className="proposals-list">
-                {proposals.map((proposal) => (
-                  <div
-                    key={proposal.id}
-                    className={`proposal-card ${selectedProposal?.id === proposal.id ? 'selected' : ''}`}
-                    onClick={() => handleViewDetails(proposal.id)}
-                  >
-                    <div className="proposal-header">
-                      <h3>{proposal.name}</h3>
-                      <span className={`status-badge ${getStatusColor(proposal.status)}`}>
-                        {proposal.status}
-                      </span>
+              <>
+                <div className="proposals-list">
+                  {proposals.map((proposal) => (
+                    <div
+                      key={proposal.id}
+                      className={`proposal-card ${selectedProposal?.id === proposal.id ? 'selected' : ''}`}
+                      onClick={() => handleViewDetails(proposal.id)}
+                    >
+                      <div className="proposal-header">
+                        <h3>{proposal.name}</h3>
+                        <span className={`status-badge ${getStatusColor(proposal.status)}`}>
+                          {proposal.status}
+                        </span>
+                      </div>
+                      <div className="proposal-meta">
+                        <span className="amount">{formatCurrency(proposal.total)}</span>
+                        <span className="date">{formatDate(proposal.createdAt)}</span>
+                      </div>
                     </div>
-                    <div className="proposal-meta">
-                      <span className="amount">{formatCurrency(proposal.total)}</span>
-                      <span className="date">{formatDate(proposal.createdAt)}</span>
-                    </div>
+                  ))}
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="pagination">
+                    <button
+                      className="page-btn"
+                      disabled={page === 1}
+                      onClick={() => handlePageChange(page - 1)}
+                    >
+                      Prev
+                    </button>
+                    <span className="page-info">Page {page} of {totalPages}</span>
+                    <button
+                      className="page-btn"
+                      disabled={page >= totalPages}
+                      onClick={() => handlePageChange(page + 1)}
+                    >
+                      Next
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
 
@@ -131,7 +271,7 @@ const Proposals = () => {
                   </div>
                   <div className="meta-item">
                     <span className="label">Created By</span>
-                    <span className="value">{selectedProposal.user_tbl?.name || 'N/A'}</span>
+                    <span className="value">{selectedProposal.user?.name || 'N/A'}</span>
                   </div>
                   {selectedProposal.project && (
                     <div className="meta-item">
@@ -157,7 +297,7 @@ const Proposals = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedProposal.item_proposed_tbls?.map((item) => (
+                      {selectedProposal.item_proposeds?.map((item) => (
                         <tr key={item.id}>
                           <td>{item.item}</td>
                           <td>{item.quantity}</td>

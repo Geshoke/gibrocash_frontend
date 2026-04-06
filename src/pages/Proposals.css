@@ -75,11 +75,156 @@
   border-bottom: 1px solid #e2e8f0;
 }
 
+/* Filter Bar */
+.filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: #f7fafc;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.filter-row {
+  display: flex;
+  gap: 10px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.filter-group.full-width {
+  flex: 1;
+}
+
+.filter-group label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4a5568;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.filter-group input,
+.filter-group select {
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  color: #2d3748;
+  transition: border-color 0.2s;
+}
+
+.filter-group input:focus,
+.filter-group select:focus {
+  outline: none;
+  border-color: #3182ce;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.apply-filter-btn {
+  padding: 8px 20px;
+  background: #1a365d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.apply-filter-btn:hover {
+  background: #2c5282;
+}
+
+.clear-filter-btn {
+  padding: 8px 16px;
+  background: white;
+  color: #e53e3e;
+  border: 1px solid #fed7d7;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.clear-filter-btn:hover {
+  background: #fff5f5;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 14px;
+  margin-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.page-btn {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #1a365d;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: #ebf8ff;
+  border-color: #3182ce;
+}
+
+.page-btn:disabled {
+  color: #a0aec0;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-size: 0.85rem;
+  color: #4a5568;
+  font-weight: 500;
+  min-width: 90px;
+  text-align: center;
+}
+
+.list-loading {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+}
+
+.spinner.small {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+  margin-bottom: 0;
+}
+
 .proposals-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 600px;
+  max-height: 520px;
   overflow-y: auto;
 }
 
