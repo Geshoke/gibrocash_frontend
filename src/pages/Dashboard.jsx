@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import './Dashboard.css';
 
 const Dashboard = () => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, canViewAllImprests } = useAuth();
   const [imprests, setImprests] = useState([]);
   const [selectedImprest, setSelectedImprest] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -35,7 +35,7 @@ const Dashboard = () => {
       if (!isRefresh) setLoading(true);
       setError('');
 
-      if (isAdmin()) {
+      if (canViewAllImprests()) {
         const [summaryRes, imprestsRes] = await Promise.all([
           imprestService.getAdminTotals(),
           imprestService.getAdminSummary(),
@@ -183,7 +183,7 @@ const Dashboard = () => {
 
         {error && <div className="error-banner">{error}</div>}
 
-        {isAdmin() && summary && (
+        {canViewAllImprests() && summary && (
           <div className="summary-cards">
             <div className="summary-card credit">
               <h3>Total Allocated</h3>

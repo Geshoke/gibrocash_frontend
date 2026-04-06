@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { authService } from '../services/api';
+import { authService, userService } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -29,24 +29,23 @@ export const AuthProvider = ({ children }) => {
     const response = await authService.login(phoneNo, password);
     const userData = response.data;
 
+    // Fetch full profile to get flags not included in login response
     localStorage.setItem('token', userData.token);
-    localStorage.setItem('user', JSON.stringify({
-      id: userData.id,
-      name: userData.name,
-      phone: userData.phone,
-      designation: userData.designation,
-      payout: userData.payout,
-      super_admin: userData.super_admin ?? false,
-    }));
+    const profileRes = await userService.getById(userData.id);
+    const profile = profileRes.data.response;
 
-    setUser({
+    const userObj = {
       id: userData.id,
       name: userData.name,
       phone: userData.phone,
       designation: userData.designation,
       payout: userData.payout,
       super_admin: userData.super_admin ?? false,
-    });
+      view_all_imprests: profile?.view_all_imprests ?? false,
+    };
+
+    localStorage.setItem('user', JSON.stringify(userObj));
+    setUser(userObj);
 
     return userData;
   };
@@ -69,6 +68,10 @@ export const AuthProvider = ({ children }) => {
     return isAdmin() || (user?.designation?.toLowerCase() === 'staff' && user?.payout === true);
   };
 
+  const canViewAllImprests = () => {
+    return isAdmin() || user?.view_all_imprests === true;
+  };
+
   const value = {
     user,
     login,
@@ -76,6 +79,7 @@ export const AuthProvider = ({ children }) => {
     isAdmin,
     isSuperAdmin,
     canPayout,
+    canViewAllImprests,
     isAuthenticated: !!user,
     loading,
   };

@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import './Imprests.css';
 
 const Imprests = () => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, canViewAllImprests } = useAuth();
   const [imprests, setImprests] = useState([]);
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -38,7 +38,7 @@ const Imprests = () => {
       setLoading(true);
       setError('');
 
-      if (isAdmin()) {
+      if (canViewAllImprests()) {
         const imprestsRes = await imprestService.getAdminSummary();
         const adminImprests = (imprestsRes.data.response || []).map(imp => ({
           id: imp.id,

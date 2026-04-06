@@ -38,6 +38,26 @@ const Users = () => {
     }
   };
 
+  const handleTogglePayout = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, payout: value } : u));
+    try {
+      await userService.togglePayout(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update payout:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, payout: !value } : u));
+    }
+  };
+
+  const handleToggleViewAllImprests = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, view_all_imprests: value } : u));
+    try {
+      await userService.toggleViewAllImprests(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update view all imprests:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, view_all_imprests: !value } : u));
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-KE', {
       year: 'numeric',
@@ -86,6 +106,8 @@ const Users = () => {
                     Super Admin
                     <span className="super-admin-hint"> — category management</span>
                   </th>
+                  <th>Payout</th>
+                  <th>View All Imprests</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,6 +134,26 @@ const Users = () => {
                           type="checkbox"
                           checked={u.super_admin ?? false}
                           onChange={e => handleToggleSuperAdmin(u, e.target.checked)}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.payout ?? false}
+                          onChange={e => handleTogglePayout(u, e.target.checked)}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.view_all_imprests ?? false}
+                          onChange={e => handleToggleViewAllImprests(u, e.target.checked)}
                         />
                         <span className="toggle-slider" />
                       </label>
