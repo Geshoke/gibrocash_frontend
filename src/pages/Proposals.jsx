@@ -6,7 +6,7 @@ import './Proposals.css';
 
 const PAGE_LIMIT = 10;
 
-const emptyFilters = { dateFrom: '', dateTo: '', item: '', userId: '' };
+const emptyFilters = { dateFrom: '', dateTo: '', item: '', name: '', userId: '' };
 
 const Proposals = () => {
   const { user, isAdmin } = useAuth();
@@ -18,13 +18,15 @@ const Proposals = () => {
   const [error, setError] = useState('');
   const [users, setUsers] = useState([]);
 
-  // Staged inputs — not sent until Apply is clicked
   const [filterInputs, setFilterInputs] = useState(emptyFilters);
-  // Last-applied filters — used for page changes
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Comparison
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareList, setCompareList] = useState([]);
 
   useEffect(() => {
     fetchProposals(1, emptyFilters);
@@ -48,6 +50,7 @@ const Proposals = () => {
       if (filters.dateFrom) params.dateFrom = filters.dateFrom;
       if (filters.dateTo) params.dateTo = filters.dateTo;
       if (filters.item) params.item = filters.item;
+      if (filters.name) params.name = filters.name;
       if (filters.userId) params.userId = filters.userId;
 
       const response = await proposalService.getAll(params);
@@ -84,6 +87,19 @@ const Proposals = () => {
   };
 
   const handleViewDetails = async (proposalId) => {
+    if (compareMode) {
+      // In compare mode, clicks add to comparison instead
+      if (compareList.some((p) => p.id === proposalId)) return;
+      if (compareList.length >= 2) return;
+      try {
+        const response = await proposalService.getById(proposalId);
+        const proposal = response.data.proposal ?? response.data;
+        setCompareList((prev) => [...prev, proposal]);
+      } catch (err) {
+        console.error('Failed to load proposal for comparison:', err);
+      }
+      return;
+    }
     try {
       const response = await proposalService.getById(proposalId);
       const proposal = response.data.proposal ?? response.data;
@@ -91,6 +107,17 @@ const Proposals = () => {
     } catch (err) {
       console.error('Failed to load proposal details:', err);
     }
+  };
+
+  const enterCompareMode = () => {
+    setCompareMode(true);
+    setCompareList([]);
+    setSelectedProposal(null);
+  };
+
+  const clearCompare = () => {
+    setCompareMode(false);
+    setCompareList([]);
   };
 
   const formatCurrency = (amount) =>
@@ -129,15 +156,24 @@ const Proposals = () => {
             <h1>Proposals</h1>
             <p>View imprest proposals and their status</p>
           </div>
+          {!compareMode && (
+            <button className="open-compare-btn" onClick={enterCompareMode} title="Compare proposals">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="18" rx="1"/>
+                <rect x="14" y="3" width="7" height="18" rx="1"/>
+              </svg>
+              <span className="open-compare-label">Compare proposals</span>
+            </button>
+          )}
         </div>
 
         {error && <div className="error-banner">{error}</div>}
 
         <div className="proposals-content">
+          {/* ── Left panel ── */}
           <div className="proposals-list-panel">
             <h2>All Proposals</h2>
 
-            {/* Filter Bar */}
             <div className="filter-bar">
               <div className="filter-row">
                 <div className="filter-group">
@@ -154,6 +190,19 @@ const Proposals = () => {
                     type="date"
                     value={filterInputs.dateTo}
                     onChange={(e) => setFilterInputs((p) => ({ ...p, dateTo: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="filter-row">
+                <div className="filter-group full-width">
+                  <label>Proposal Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Demobilisation, Borehole..."
+                    value={filterInputs.name}
+                    onChange={(e) => setFilterInputs((p) => ({ ...p, name: e.target.value }))}
+                    onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
                   />
                 </div>
               </div>
@@ -189,13 +238,9 @@ const Proposals = () => {
               )}
 
               <div className="filter-actions">
-                <button className="apply-filter-btn" onClick={handleApplyFilters}>
-                  Apply
-                </button>
+                <button className="apply-filter-btn" onClick={handleApplyFilters}>Apply</button>
                 {hasActiveFilters && (
-                  <button className="clear-filter-btn" onClick={handleClearFilters}>
-                    Clear All
-                  </button>
+                  <button className="clear-filter-btn" onClick={handleClearFilters}>Clear All</button>
                 )}
               </div>
             </div>
@@ -211,41 +256,42 @@ const Proposals = () => {
             ) : (
               <>
                 <div className="proposals-list">
-                  {proposals.map((proposal) => (
-                    <div
-                      key={proposal.id}
-                      className={`proposal-card ${selectedProposal?.id === proposal.id ? 'selected' : ''}`}
-                      onClick={() => handleViewDetails(proposal.id)}
-                    >
-                      <div className="proposal-header">
-                        <h3>{proposal.name}</h3>
-                        <span className={`status-badge ${getStatusColor(proposal.status)}`}>
-                          {proposal.status}
-                        </span>
+                  {proposals.map((proposal) => {
+                    const inCompare = compareList.some((p) => p.id === proposal.id);
+                    const compareFull = compareMode && compareList.length >= 2 && !inCompare;
+                    return (
+                      <div
+                        key={proposal.id}
+                        className={`proposal-card
+                          ${selectedProposal?.id === proposal.id && !compareMode ? 'selected' : ''}
+                          ${inCompare ? 'in-compare' : ''}
+                          ${compareMode && !inCompare && !compareFull ? 'compare-pick' : ''}
+                          ${compareFull ? 'compare-full' : ''}
+                        `}
+                        onClick={() => handleViewDetails(proposal.id)}
+                      >
+                        <div className="proposal-header">
+                          <h3>{proposal.name}</h3>
+                          <span className={`status-badge ${getStatusColor(proposal.status)}`}>
+                            {proposal.status}
+                          </span>
+                        </div>
+                        <div className="proposal-meta">
+                          <span className="amount">{formatCurrency(proposal.total)}</span>
+                          <span className="date">{formatDate(proposal.createdAt)}</span>
+                        </div>
                       </div>
-                      <div className="proposal-meta">
-                        <span className="amount">{formatCurrency(proposal.total)}</span>
-                        <span className="date">{formatDate(proposal.createdAt)}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {totalPages > 1 && (
                   <div className="pagination">
-                    <button
-                      className="page-btn"
-                      disabled={page === 1}
-                      onClick={() => handlePageChange(page - 1)}
-                    >
+                    <button className="page-btn" disabled={page === 1} onClick={() => handlePageChange(page - 1)}>
                       Prev
                     </button>
                     <span className="page-info">Page {page} of {totalPages}</span>
-                    <button
-                      className="page-btn"
-                      disabled={page >= totalPages}
-                      onClick={() => handlePageChange(page + 1)}
-                    >
+                    <button className="page-btn" disabled={page >= totalPages} onClick={() => handlePageChange(page + 1)}>
                       Next
                     </button>
                   </div>
@@ -254,8 +300,85 @@ const Proposals = () => {
             )}
           </div>
 
+          {/* ── Right panel ── */}
           <div className="proposal-details-panel">
-            {selectedProposal ? (
+            {compareMode ? (
+              <div className="compare-view">
+                <div className="compare-view-header">
+                  <h2>
+                    {compareList.length === 0
+                      ? 'Select proposals to compare'
+                      : compareList.length === 1
+                      ? 'Pick one more proposal'
+                      : 'Comparison'}
+                  </h2>
+                  <button className="clear-compare-btn" onClick={clearCompare}>Exit</button>
+                </div>
+
+                <div className={`compare-columns cols-${Math.max(compareList.length, 1)}`}>
+                  {compareList.map((proposal) => (
+                    <div key={proposal.id} className="compare-column">
+                      <div className="compare-col-header">
+                        <div className="compare-col-title">
+                          <h3>{proposal.name}</h3>
+                          <span className={`status-badge ${getStatusColor(proposal.status)}`}>
+                            {proposal.status}
+                          </span>
+                        </div>
+                        <button
+                          className="compare-toggle-btn remove"
+                          onClick={() => setCompareList((prev) => prev.filter((p) => p.id !== proposal.id))}
+                          title="Remove"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <div className="compare-meta">
+                        <span>{proposal.user?.name || 'N/A'}</span>
+                        <span>{formatDate(proposal.createdAt)}</span>
+                        {proposal.project && <span>{proposal.project.name}</span>}
+                      </div>
+
+                      <table className="items-table">
+                        <thead>
+                          <tr>
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th>Unit</th>
+                            <th>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {proposal.item_proposeds?.map((item) => (
+                            <tr key={item.id}>
+                              <td>{item.item}</td>
+                              <td>{item.quantity}</td>
+                              <td>{formatCurrency(item.total_price)}</td>
+                              <td>{formatCurrency(item.total_price * item.quantity)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr>
+                            <td colSpan="3" className="total-label">Grand Total</td>
+                            <td className="compare-grand-total">{formatCurrency(proposal.total)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ))}
+
+                  {compareList.length < 2 && (
+                    <div className="compare-placeholder">
+                      <span>+</span>
+                      <p>Click a proposal on the left</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            ) : selectedProposal ? (
               <>
                 <div className="details-header">
                   <h2>{selectedProposal.name}</h2>
@@ -301,8 +424,8 @@ const Proposals = () => {
                         <tr key={item.id}>
                           <td>{item.item}</td>
                           <td>{item.quantity}</td>
-                          <td>{formatCurrency(item.total_price / item.quantity)}</td>
                           <td>{formatCurrency(item.total_price)}</td>
+                          <td>{formatCurrency(item.total_price * item.quantity)}</td>
                         </tr>
                       ))}
                     </tbody>

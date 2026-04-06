@@ -259,6 +259,28 @@
   font-size: 0.95rem;
 }
 
+/* Card states during comparison */
+.proposal-card.in-compare {
+  border-color: #3182ce;
+  background: #ebf8ff;
+}
+
+.proposal-card.compare-pick {
+  border-style: dashed;
+  cursor: pointer;
+}
+
+.proposal-card.compare-pick:hover {
+  border-color: #3182ce;
+  background: #f0f7ff;
+}
+
+.proposal-card.compare-full {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .status-badge {
   font-size: 0.65rem;
   padding: 4px 8px;
@@ -309,6 +331,72 @@
 
 .proposal-details-panel {
   padding: 24px;
+}
+
+/* Compare button — in the page header */
+.open-compare-btn {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #4a5568;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  overflow: hidden;
+  max-width: 42px;
+  transition: max-width 0.25s ease, border-color 0.2s, color 0.2s, background 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.open-compare-btn:hover {
+  max-width: 200px;
+  border-color: #3182ce;
+  color: #1a365d;
+  background: #ebf8ff;
+}
+
+.open-compare-label {
+  margin-left: 8px;
+  opacity: 0;
+  transition: opacity 0.15s ease 0.1s;
+  pointer-events: none;
+}
+
+.open-compare-btn:hover .open-compare-label {
+  opacity: 1;
+}
+
+/* Remove button inside comparison columns */
+.compare-toggle-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.compare-toggle-btn.remove {
+  background: #fed7d7;
+  color: #c53030;
+}
+
+.compare-toggle-btn.remove:hover {
+  background: #c53030;
+  color: white;
+  transform: scale(1.1);
 }
 
 .details-header {
@@ -687,4 +775,110 @@
 .submit-button:disabled {
   background: #a0aec0;
   cursor: not-allowed;
+}
+
+/* ── Comparison view ── */
+.compare-view {
+  height: 100%;
+}
+
+.compare-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.compare-view-header h2 {
+  margin: 0;
+  color: #1a365d;
+  font-size: 1.1rem;
+}
+
+.clear-compare-btn {
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #4a5568;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.clear-compare-btn:hover {
+  background: #f7fafc;
+  border-color: #a0aec0;
+}
+
+.compare-columns {
+  display: grid;
+  gap: 20px;
+  overflow-x: auto;
+}
+
+.compare-columns.cols-1 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.compare-columns.cols-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.compare-column {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.compare-col-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.compare-col-title h3 {
+  margin: 0 0 4px 0;
+  color: #1a365d;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.compare-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 0.8rem;
+  color: #718096;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.compare-grand-total {
+  font-weight: 700;
+  color: #1a365d;
+}
+
+/* Placeholder column when only 1 proposal is in compare */
+.compare-placeholder {
+  border: 2px dashed #e2e8f0;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 200px;
+  color: #a0aec0;
+}
+
+.compare-placeholder span {
+  font-size: 2rem;
+  font-weight: 300;
+  line-height: 1;
 }

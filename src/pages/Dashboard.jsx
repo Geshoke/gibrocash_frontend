@@ -11,6 +11,7 @@ const Dashboard = () => {
   const [transactions, setTransactions] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [transactionImageUrl, setTransactionImageUrl] = useState(null);
@@ -23,9 +24,15 @@ const Dashboard = () => {
     fetchData();
   }, [user]);
 
-  const fetchData = async () => {
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchData(true);
+    setRefreshing(false);
+  };
+
+  const fetchData = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) setLoading(true);
       setError('');
 
       if (isAdmin()) {
@@ -160,8 +167,18 @@ const Dashboard = () => {
     <Layout>
       <div className="dashboard">
         <div className="dashboard-header">
-          <h1>Account Statement</h1>
-          <p>Welcome back, {user?.name}</p>
+          <div>
+            <h1>Account Statement</h1>
+            <p>Welcome back, {user?.name}</p>
+          </div>
+          <button
+            className={`refresh-btn ${refreshing ? 'spinning' : ''}`}
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Refresh"
+          >
+            ↻
+          </button>
         </div>
 
         {error && <div className="error-banner">{error}</div>}

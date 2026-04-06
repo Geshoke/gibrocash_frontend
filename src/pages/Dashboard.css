@@ -3,7 +3,41 @@
 }
 
 .dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 24px;
+}
+
+.refresh-btn {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  font-size: 1.3rem;
+  color: #4a5568;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  line-height: 1;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #ebf8ff;
+  color: #1a365d;
+  border-color: #3182ce;
+}
+
+.refresh-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.refresh-btn.spinning {
+  animation: spin 0.7s linear infinite;
 }
 
 .dashboard-header h1 {
