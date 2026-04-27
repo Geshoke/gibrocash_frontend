@@ -135,6 +135,10 @@ export const payoutService = {
   // Fetch persisted B2C payment ledger from DB
   getPayments: () =>
     paybillApi.get('/shortcode_3576329/b2c/payments'),
+
+  // Fetch persisted B2B payment ledger from DB
+  getB2bPayments: () =>
+    paybillApi.get('/shortcode_3576329/b2b/payments'),
 };
 
 export default api;
