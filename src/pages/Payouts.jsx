@@ -171,24 +171,49 @@ const Payouts = () => {
   };
 
   const fetchLedger = () => {
-    payoutService.getPayments()
-      .then(({ data }) => {
-        const mapped = (data.payments || []).map(p => ({
-          id: String(p.id),
-          type: 'single',
-          label: p.remarks || '—',
-          amount: parseFloat(p.amount),
-          date: p.initiatedAt,
-          status: mapDbStatus(p.status),
-          payload: {
-            partyB: p.partyB,
-            transactionReceipt: p.transactionReceipt,
-            receiverPublicName: p.receiverPublicName,
-          },
-        }));
-        setHistory(mapped);
-      })
-      .catch(() => {}); // silent — stale data is better than a crash
+    Promise.allSettled([
+      payoutService.getPayments(),
+      payoutService.getB2bPayments(),
+    ]).then(([b2cResult, b2bResult]) => {
+      const b2cPayments = b2cResult.status === 'fulfilled'
+        ? (b2cResult.value.data.payments || []).map(p => ({
+            id:     `b2c-${p.id}`,
+            type:   'single',
+            label:  p.remarks || '—',
+            amount: parseFloat(p.amount),
+            date:   p.initiatedAt,
+            status: mapDbStatus(p.status),
+            payload: {
+              partyB:             p.partyB,
+              transactionReceipt: p.transactionReceipt,
+              receiverPublicName: p.receiverPublicName,
+            },
+          }))
+        : [];
+
+      const b2bPayments = b2bResult.status === 'fulfilled'
+        ? (b2bResult.value.data.payments || []).map(p => ({
+            id:     `b2b-${p.id}`,
+            type:   'b2b',
+            label:  p.remarks || '—',
+            amount: parseFloat(p.amount),
+            date:   p.initiatedAt,
+            status: mapDbStatus(p.status),
+            payload: {
+              partyB:             p.partyB,
+              accountReference:   p.accountReference,
+              destinationAccount: p.destinationAccount,
+              commandId:          p.commandId,
+              transactionReceipt: p.transactionReceipt,
+            },
+          }))
+        : [];
+
+      const merged = [...b2cPayments, ...b2bPayments]
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      setHistory(merged);
+    });
   };
 
   useEffect(() => { fetchLedger(); }, []); // eslint-disable-line
