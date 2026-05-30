@@ -280,10 +280,12 @@ const Projects = () => {
                 <p>No projects found.</p>
               </div>
             ) : (() => {
-              const filtered = projects.filter(p =>
-                p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
-                (p.description || '').toLowerCase().includes(projectSearch.toLowerCase())
-              );
+              const filtered = projects
+                .filter(p =>
+                  p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
+                  (p.description || '').toLowerCase().includes(projectSearch.toLowerCase())
+                )
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
               return filtered.length === 0 ? (
                 <div className="no-data"><p>No projects match your search.</p></div>
               ) : filtered.map((project) => (
@@ -448,6 +450,12 @@ const Projects = () => {
                               <span className="txn-count">
                                 {txns.length} txn{txns.length !== 1 ? 's' : ''}
                               </span>
+                            )}
+                            {imprest.createdAt && (
+                              <>
+                                <span className="separator">·</span>
+                                <span className="imprest-created-date">Created {formatDate(imprest.createdAt)}</span>
+                              </>
                             )}
                           </div>
                         </div>

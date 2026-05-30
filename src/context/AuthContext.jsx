@@ -42,6 +42,7 @@ export const AuthProvider = ({ children }) => {
       payout: userData.payout,
       super_admin: userData.super_admin ?? false,
       view_all_imprests: profile?.view_all_imprests ?? false,
+      edit_transactions: profile?.edit_transactions ?? false,
     };
 
     localStorage.setItem('user', JSON.stringify(userObj));
@@ -72,6 +73,10 @@ export const AuthProvider = ({ children }) => {
     return isAdmin() || user?.view_all_imprests === true;
   };
 
+  const canEditTransactions = () => {
+    return user?.edit_transactions === true;
+  };
+
   const value = {
     user,
     login,
@@ -80,6 +85,7 @@ export const AuthProvider = ({ children }) => {
     isSuperAdmin,
     canPayout,
     canViewAllImprests,
+    canEditTransactions,
     isAuthenticated: !!user,
     loading,
   };

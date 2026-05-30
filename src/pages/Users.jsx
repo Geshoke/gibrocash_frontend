@@ -58,6 +58,16 @@ const Users = () => {
     }
   };
 
+  const handleToggleEditTransactions = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, edit_transactions: value } : u));
+    try {
+      await userService.toggleEditTransactions(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update edit transactions:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, edit_transactions: !value } : u));
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-KE', {
       year: 'numeric',
@@ -108,6 +118,7 @@ const Users = () => {
                   </th>
                   <th>Payout</th>
                   <th>View All Imprests</th>
+                  <th>Edit Transactions</th>
                 </tr>
               </thead>
               <tbody>
@@ -154,6 +165,16 @@ const Users = () => {
                           type="checkbox"
                           checked={u.view_all_imprests ?? false}
                           onChange={e => handleToggleViewAllImprests(u, e.target.checked)}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.edit_transactions ?? false}
+                          onChange={e => handleToggleEditTransactions(u, e.target.checked)}
                         />
                         <span className="toggle-slider" />
                       </label>

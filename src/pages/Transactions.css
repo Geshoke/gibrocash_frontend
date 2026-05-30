@@ -164,6 +164,12 @@
   flex-shrink: 0;
 }
 
+.txn-list-uploader {
+  font-size: 0.72rem;
+  color: #a0aec0;
+  margin-top: 3px;
+}
+
 /* ── Right detail panel ───────────────────────────────────── */
 .txn-detail-panel {
   flex: 1;
@@ -493,3 +499,70 @@
   border-radius: 8px;
   margin-bottom: 16px;
 }
+
+/* ── Edit transaction ─────────────────────────────────────── */
+.txn-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.txn-edit-btn {
+  font-size: 0.8rem;
+  padding: 4px 12px;
+  border: 1px solid #3182ce;
+  border-radius: 6px;
+  background: transparent;
+  color: #3182ce;
+  cursor: pointer;
+}
+.txn-edit-btn:hover { background: #ebf8ff; }
+
+.txn-edit-form { display: flex; flex-direction: column; gap: 14px; }
+
+.txn-edit-input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+.txn-edit-input:focus { outline: none; border-color: #3182ce; }
+
+.txn-edit-error {
+  color: #c53030;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.txn-edit-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.txn-edit-cancel-btn {
+  padding: 7px 16px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4a5568;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.txn-edit-cancel-btn:hover { background: #f7fafc; }
+
+.txn-edit-save-btn {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #3182ce;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.txn-edit-save-btn:hover { background: #2b6cb0; }
+.txn-edit-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }

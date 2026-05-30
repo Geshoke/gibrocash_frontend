@@ -345,6 +345,7 @@
 .imprest-block-amounts .positive { color: #2f855a; font-weight: 600; }
 .imprest-block-amounts .negative { color: #c53030; font-weight: 600; }
 .imprest-block-amounts .separator { color: #cbd5e0; }
+.imprest-created-date { font-size: 0.75rem; color: #a0aec0; }
 
 .imprest-assignees {
   font-size: 0.8rem;

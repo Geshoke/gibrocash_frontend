@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import './Transactions.css';
 
 const Transactions = () => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, canEditTransactions } = useAuth();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -17,6 +17,10 @@ const Transactions = () => {
   const [imageError, setImageError] = useState('');
   const [categories, setCategories] = useState([]);
   const [categoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({ item: '', quantity: '', unitPrice: '', vat_charged: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   useEffect(() => {
     fetchTransactions();
@@ -135,6 +139,48 @@ const Transactions = () => {
     }
   };
 
+  const openEdit = () => {
+    setEditForm({
+      item: selectedTransaction.item || '',
+      quantity: String(selectedTransaction.quantity ?? ''),
+      unitPrice: String(selectedTransaction.unitPrice ?? ''),
+      vat_charged: String(selectedTransaction.vat_charged ?? ''),
+    });
+    setEditError('');
+    setEditMode(true);
+  };
+
+  const cancelEdit = () => {
+    setEditMode(false);
+    setEditError('');
+  };
+
+  const saveEdit = async () => {
+    const { item, quantity, unitPrice, vat_charged } = editForm;
+    if (!item.trim() || !quantity || !unitPrice) {
+      setEditError('Item, quantity and unit price are required.');
+      return;
+    }
+    const qty = parseFloat(quantity);
+    const up  = parseFloat(unitPrice);
+    const vat = parseFloat(vat_charged) || 0;
+    const price = parseFloat((qty * up + vat).toFixed(2));
+
+    setEditSaving(true);
+    setEditError('');
+    try {
+      await transactionService.update(selectedTransaction.id, { item: item.trim(), quantity: qty, unitPrice: up, vat_charged: vat, price });
+      const updated = { ...selectedTransaction, item: item.trim(), quantity: qty, unitPrice: up, vat_charged: vat, price };
+      setSelectedTransaction(updated);
+      setTransactions(prev => prev.map(t => t.id === updated.id ? { ...t, item: updated.item, quantity: updated.quantity, unitPrice: updated.unitPrice, vat_charged: updated.vat_charged, price: updated.price } : t));
+      setEditMode(false);
+    } catch (err) {
+      setEditError('Failed to save changes. Please try again.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const formatCurrency = (amount) =>
     new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount || 0);
 
@@ -198,6 +244,9 @@ const Transactions = () => {
                       <span className="txn-list-imprest">{txn.imprest?.name || '—'}</span>
                       <span className="txn-list-amount">{formatCurrency(txn.price)}</span>
                     </div>
+                    {txn.User?.name && (
+                      <div className="txn-list-uploader">by {txn.User.name}</div>
+                    )}
                   </div>
                 ))}
                 {hasMore && (
@@ -226,24 +275,89 @@ const Transactions = () => {
                     <h2>{selectedTransaction.item}</h2>
                     <span className="txn-detail-imprest-badge">{selectedTransaction.imprest?.name || '—'}</span>
                   </div>
-                  <button
-                    className="close-preview-btn"
-                    onClick={() => {
-                      setSelectedTransaction(null);
-                      setTransactionImageUrl(null);
-                      setImageError('');
-                    }}
-                  >
-                    &times;
-                  </button>
+                  <div className="txn-detail-header-actions">
+                    {canEditTransactions() && !editMode && (
+                      <button className="txn-edit-btn" onClick={openEdit}>Edit</button>
+                    )}
+                    <button
+                      className="close-preview-btn"
+                      onClick={() => {
+                        setSelectedTransaction(null);
+                        setTransactionImageUrl(null);
+                        setImageError('');
+                        setEditMode(false);
+                      }}
+                    >
+                      &times;
+                    </button>
+                  </div>
                 </div>
 
                 <div className="txn-detail-body">
+                  {editMode ? (
+                    <div className="txn-edit-form">
+                      <div className="txn-detail-field">
+                        <span className="txn-detail-label">Item / Description</span>
+                        <input
+                          className="txn-edit-input"
+                          type="text"
+                          value={editForm.item}
+                          onChange={e => setEditForm(p => ({ ...p, item: e.target.value }))}
+                        />
+                      </div>
+                      <div className="txn-detail-field">
+                        <span className="txn-detail-label">Quantity</span>
+                        <input
+                          className="txn-edit-input"
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={editForm.quantity}
+                          onChange={e => setEditForm(p => ({ ...p, quantity: e.target.value }))}
+                        />
+                      </div>
+                      <div className="txn-detail-field">
+                        <span className="txn-detail-label">Unit Price (KES)</span>
+                        <input
+                          className="txn-edit-input"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editForm.unitPrice}
+                          onChange={e => setEditForm(p => ({ ...p, unitPrice: e.target.value }))}
+                        />
+                      </div>
+                      <div className="txn-detail-field">
+                        <span className="txn-detail-label">VAT (KES)</span>
+                        <input
+                          className="txn-edit-input"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editForm.vat_charged}
+                          onChange={e => setEditForm(p => ({ ...p, vat_charged: e.target.value }))}
+                        />
+                      </div>
+                      {editError && <p className="txn-edit-error">{editError}</p>}
+                      <div className="txn-edit-actions">
+                        <button className="txn-edit-cancel-btn" onClick={cancelEdit} disabled={editSaving}>Cancel</button>
+                        <button className="txn-edit-save-btn" onClick={saveEdit} disabled={editSaving}>
+                          {editSaving ? 'Saving…' : 'Save Changes'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                   <div className="txn-detail-grid">
                     <div className="txn-detail-field">
                       <span className="txn-detail-label">Date</span>
                       <span className="txn-detail-value">{formatDate(selectedTransaction.createdAt)} {formatTime(selectedTransaction.createdAt)}</span>
                     </div>
+                    {selectedTransaction.User?.name && (
+                      <div className="txn-detail-field">
+                        <span className="txn-detail-label">Uploaded by</span>
+                        <span className="txn-detail-value">{selectedTransaction.User.name}</span>
+                      </div>
+                    )}
                     <div className="txn-detail-field">
                       <span className="txn-detail-label">Quantity</span>
                       <span className="txn-detail-value">{selectedTransaction.quantity}</span>
@@ -261,6 +375,7 @@ const Transactions = () => {
                       <span className="txn-detail-value debit">{formatCurrency(selectedTransaction.price)}</span>
                     </div>
                   </div>
+                  )}
 
                   {/* Categories */}
                   <div className="txn-detail-section">
