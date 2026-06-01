@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import './Transactions.css';
 
 const Transactions = () => {
-  const { user, isAdmin, canEditTransactions } = useAuth();
+  const { user, canViewAllImprests, canEditTransactions } = useAuth();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -39,7 +39,7 @@ const Transactions = () => {
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      const userId = isAdmin() ? undefined : user.id;
+      const userId = canViewAllImprests() ? undefined : user.id;
       const response = await transactionService.getAll(userId, 1, LIMIT);
       const rows = response.data?.transactions?.rows || [];
       const count = response.data?.transactions?.count || 0;
@@ -58,7 +58,7 @@ const Transactions = () => {
     try {
       setLoadingMore(true);
       const nextPage = page + 1;
-      const userId = isAdmin() ? undefined : user.id;
+      const userId = canViewAllImprests() ? undefined : user.id;
       const response = await transactionService.getAll(userId, nextPage, LIMIT);
       const rows = response.data?.transactions?.rows || [];
       const count = response.data?.transactions?.count || 0;

@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const canPayout = () => {
-    return isAdmin() || (user?.designation?.toLowerCase() === 'staff' && user?.payout === true);
+    return user?.payout === true;
   };
 
   const canViewAllImprests = () => {

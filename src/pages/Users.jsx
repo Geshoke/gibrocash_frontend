@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import './Users.css';
 
 const Users = () => {
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -145,6 +145,7 @@ const Users = () => {
                           type="checkbox"
                           checked={u.super_admin ?? false}
                           onChange={e => handleToggleSuperAdmin(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />
                       </label>
@@ -155,6 +156,7 @@ const Users = () => {
                           type="checkbox"
                           checked={u.payout ?? false}
                           onChange={e => handleTogglePayout(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />
                       </label>
@@ -165,6 +167,7 @@ const Users = () => {
                           type="checkbox"
                           checked={u.view_all_imprests ?? false}
                           onChange={e => handleToggleViewAllImprests(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />
                       </label>
@@ -175,6 +178,7 @@ const Users = () => {
                           type="checkbox"
                           checked={u.edit_transactions ?? false}
                           onChange={e => handleToggleEditTransactions(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />
                       </label>

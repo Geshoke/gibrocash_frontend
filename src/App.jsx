@@ -63,7 +63,7 @@ function App() {
           <Route
             path="/payouts"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute require="payout">
                 <Payouts />
               </ProtectedRoute>
             }
@@ -71,7 +71,7 @@ function App() {
           <Route
             path="/users"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute require="admin">
                 <Users />
               </ProtectedRoute>
             }

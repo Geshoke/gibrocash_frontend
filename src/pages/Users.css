@@ -346,3 +346,12 @@
 .toggle-switch input:checked + .toggle-slider::before {
   transform: translateX(18px);
 }
+
+.toggle-switch input:disabled + .toggle-slider {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.toggle-switch:has(input:disabled) {
+  cursor: not-allowed;
+}

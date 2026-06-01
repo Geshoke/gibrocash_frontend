@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { imprestService, userService, projectService, imageService } from '../services/api';
+import { imprestService, userService, projectService, imageService, proposalService } from '../services/api';
 import Layout from '../components/Layout';
 import './Imprests.css';
 
 const Imprests = () => {
-  const { user, isAdmin, canViewAllImprests } = useAuth();
+  const { user, isSuperAdmin, canViewAllImprests } = useAuth();
   const [imprests, setImprests] = useState([]);
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -18,6 +18,10 @@ const Imprests = () => {
   const [imprestImages, setImprestImages] = useState([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
+
+  // Proposal modal
+  const [proposalModal, setProposalModal] = useState(null);
+  const [loadingProposal, setLoadingProposal] = useState(false);
 
   // Slide panel (admin features)
   const [panelImprest, setPanelImprest] = useState(null);
@@ -50,6 +54,7 @@ const Imprests = () => {
           assignedTo: imp.assignedTo || [],
           projectName: imp.projectName || imp.project?.name || null,
           projectId: imp.projectId || imp.project?.id || null,
+          proposalId: imp.proposal_id || null,
         }));
         setImprests(adminImprests);
       } else {
@@ -64,6 +69,7 @@ const Imprests = () => {
           createdAt: imp.createdAt,
           projectName: imp.projectName || imp.project?.name || null,
           projectId: imp.projectId || imp.project?.id || null,
+          proposalId: imp.proposal_id || null,
         }));
         setImprests(staffImprests);
       }
@@ -177,6 +183,23 @@ const Imprests = () => {
       setImprests(prev => prev.map(i => i.id === updated.id ? updated : i));
     } catch (err) {
       setUserActionError(err.response?.data?.response || 'Failed to remove user');
+    }
+  };
+
+  // ── Proposal modal ─────────────────────────────────────────
+  const handleViewProposal = async (e, proposalId) => {
+    e.stopPropagation();
+    setLoadingProposal(true);
+    setProposalModal({ loading: true });
+    try {
+      const res = await proposalService.getById(proposalId);
+      const p = res.data.proposal || res.data;
+      setProposalModal(p);
+    } catch (err) {
+      console.error('Failed to load proposal:', err);
+      setProposalModal(null);
+    } finally {
+      setLoadingProposal(false);
     }
   };
 
@@ -311,7 +334,7 @@ const Imprests = () => {
                       <span className={`status-badge ${getStatusClass(imprest)}`}>
                         {imprest.closedStatus_Flag ? 'Closed' : 'Active'}
                       </span>
-                      {isAdmin() && (
+                      {isSuperAdmin() && (
                         <button
                           className="hamburger-btn"
                           onClick={(e) => openPanel(e, imprest)}
@@ -363,6 +386,15 @@ const Imprests = () => {
 
                   <div className="card-footer">
                     <span className="date">Created: {formatDate(imprest.createdAt)}</span>
+                    {imprest.proposalId && (
+                      <button
+                        className="proposal-link-btn"
+                        onClick={(e) => handleViewProposal(e, imprest.proposalId)}
+                        title="View linked proposal"
+                      >
+                        View Proposal
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -551,6 +583,69 @@ const Imprests = () => {
           </>
         )}
       </div>
+
+      {/* ── Proposal Modal ── */}
+      {proposalModal && (
+        <div className="proposal-modal-overlay" onClick={() => setProposalModal(null)}>
+          <div className="proposal-modal" onClick={e => e.stopPropagation()}>
+            <div className="pm-header">
+              <div>
+                <h3>{proposalModal.name || 'Proposal'}</h3>
+                {proposalModal.status && (
+                  <span className={`status-badge ${proposalModal.status}`}>{proposalModal.status}</span>
+                )}
+              </div>
+              <button className="pm-close-btn" onClick={() => setProposalModal(null)}>×</button>
+            </div>
+
+            {loadingProposal || proposalModal.loading ? (
+              <div className="pm-loading"><div className="spinner"></div></div>
+            ) : (
+              <div className="pm-body">
+                <div className="pm-meta">
+                  {proposalModal.user && <span>Created by: <strong>{proposalModal.user.name}</strong></span>}
+                  {proposalModal.project && <span>Project: <strong>{proposalModal.project.name}</strong></span>}
+                  {proposalModal.total != null && (
+                    <span>Total: <strong>{formatCurrency(proposalModal.total)}</strong></span>
+                  )}
+                </div>
+
+                <p className="pm-section-label">Proposed Items</p>
+                {(proposalModal.item_proposeds || []).length === 0 ? (
+                  <p className="pm-empty">No items listed in this proposal.</p>
+                ) : (
+                  <table className="pm-items-table">
+                    <thead>
+                      <tr>
+                        <th>Item</th>
+                        <th>Qty</th>
+                        <th>Unit Price</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(proposalModal.item_proposeds || []).map((item, i) => (
+                        <tr key={item.id || i}>
+                          <td>{item.item}</td>
+                          <td>{item.quantity}</td>
+                          <td>{formatCurrency(item.total_price)}</td>
+                          <td>{formatCurrency(item.total_price * item.quantity)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={3}><strong>Total</strong></td>
+                        <td><strong>{formatCurrency(proposalModal.total)}</strong></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };

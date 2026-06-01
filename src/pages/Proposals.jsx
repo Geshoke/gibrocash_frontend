@@ -9,8 +9,8 @@ const PAGE_LIMIT = 10;
 const emptyFilters = { dateFrom: '', dateTo: '', item: '', name: '', userId: '' };
 
 const Proposals = () => {
-  const { user, isAdmin } = useAuth();
-  const admin = isAdmin();
+  const { user, canViewAllImprests } = useAuth();
+  const admin = canViewAllImprests();
 
   const [proposals, setProposals] = useState([]);
   const [selectedProposal, setSelectedProposal] = useState(null);

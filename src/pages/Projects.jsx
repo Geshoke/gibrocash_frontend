@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import './Projects.css';
 
 const Projects = () => {
-  const { isAdmin } = useAuth();
+  const { canViewAllImprests } = useAuth();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectDetail, setProjectDetail] = useState(null);
@@ -402,7 +402,7 @@ const Projects = () => {
                                 {imprest.source}
                               </span>
                             </div>
-                            {isAdmin() && (
+                            {canViewAllImprests() && (
                               <div
                                 className="imprest-menu-wrapper"
                                 onClick={e => e.stopPropagation()}

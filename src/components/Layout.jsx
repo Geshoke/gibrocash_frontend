@@ -5,7 +5,7 @@ import APP_VERSION from '../version';
 import './Layout.css';
 
 const Layout = ({ children }) => {
-  const { user, logout, isAdmin, canPayout } = useAuth();
+  const { user, logout, isSuperAdmin, canPayout } = useAuth();
   const location = useLocation();
 
   const navItems = [
@@ -19,7 +19,7 @@ const Layout = ({ children }) => {
   if (canPayout()) {
     navItems.push({ path: '/payouts', label: 'Payouts', icon: '💸' });
   }
-  if (isAdmin()) {
+  if (isSuperAdmin()) {
     navItems.push({ path: '/users', label: 'Users', icon: '👥' });
   }
 
