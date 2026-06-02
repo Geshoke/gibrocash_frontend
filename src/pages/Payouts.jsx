@@ -177,12 +177,13 @@ const Payouts = () => {
     ]).then(([b2cResult, b2bResult]) => {
       const b2cPayments = b2cResult.status === 'fulfilled'
         ? (b2cResult.value.data.payments || []).map(p => ({
-            id:     `b2c-${p.id}`,
-            type:   'single',
-            label:  p.remarks || '—',
-            amount: parseFloat(p.amount),
-            date:   p.initiatedAt,
-            status: mapDbStatus(p.status),
+            id:          `b2c-${p.id}`,
+            type:        'single',
+            label:       p.remarks || '—',
+            amount:      parseFloat(p.amount),
+            date:        p.initiatedAt,
+            status:      mapDbStatus(p.status),
+            initiatedBy: p.initiatedBy || null,
             payload: {
               partyB:             p.partyB,
               transactionReceipt: p.transactionReceipt,
@@ -193,12 +194,13 @@ const Payouts = () => {
 
       const b2bPayments = b2bResult.status === 'fulfilled'
         ? (b2bResult.value.data.payments || []).map(p => ({
-            id:     `b2b-${p.id}`,
-            type:   'b2b',
-            label:  p.remarks || '—',
-            amount: parseFloat(p.amount),
-            date:   p.initiatedAt,
-            status: mapDbStatus(p.status),
+            id:          `b2b-${p.id}`,
+            type:        'b2b',
+            label:       p.remarks || '—',
+            amount:      parseFloat(p.amount),
+            date:        p.initiatedAt,
+            status:      mapDbStatus(p.status),
+            initiatedBy: p.initiatedBy || null,
             payload: {
               partyB:             p.partyB,
               accountReference:   p.accountReference,
@@ -466,6 +468,7 @@ const Payouts = () => {
     try {
       const { data } = await payoutService.request({
         type: 'payroll', payload: { rows: resolvedRows, payloads }, label, amount: totalAmount,
+        initiatedBy: user.name,
       });
       openModal('payroll', label, totalAmount, { rows: resolvedRows, payloads }, data.payoutId);
     } catch {
@@ -487,7 +490,7 @@ const Payouts = () => {
     };
     setRequesting(true);
     try {
-      const { data } = await payoutService.request({ type: 'single', payload, label, amount });
+      const { data } = await payoutService.request({ type: 'single', payload, label, amount, initiatedBy: user.name });
       openModal('single', label, amount, { ...single }, data.payoutId);
     } catch {
       alert('Failed to initiate payout. Please try again.');
@@ -506,6 +509,7 @@ const Payouts = () => {
     try {
       const { data } = await payoutService.request({
         type: 'b2b', payload: { b2bType, ...b2b }, label, amount,
+        initiatedBy: user.name,
       });
       openModal('b2b', label, amount, { b2bType, ...b2b }, data.payoutId);
     } catch {
@@ -529,7 +533,7 @@ const Payouts = () => {
     const payload = { phoneNumber: normalizePhone(contact), amount: amt, remarks: description || 'Transaction Payout' };
     setTxnRequesting(true);
     try {
-      const { data } = await payoutService.request({ type: 'single', payload, label, amount: amt });
+      const { data } = await payoutService.request({ type: 'single', payload, label, amount: amt, initiatedBy: user.name });
       setModalStep('pin');
       openModal('txn_payout', label, amt, { ...txnPayout, imprest: selectedImprest }, data.payoutId);
     } catch {
@@ -830,6 +834,7 @@ const Payouts = () => {
                           <th>Type</th>
                           <th>Description</th>
                           <th>Amount</th>
+                          <th>Transacted by</th>
                           <th>Status</th>
                           <th></th>
                         </tr>
@@ -842,6 +847,7 @@ const Payouts = () => {
                               <td><span className={`po-type-badge ${entry.type}`}>{TYPE_LABEL[entry.type]}</span></td>
                               <td className="td-desc">{entry.label}</td>
                               <td className="td-amount">{entry.amount !== null ? fmtCur(entry.amount) : '—'}</td>
+                              <td className="td-initiated-by">{entry.initiatedBy || '—'}</td>
                               <td>
                                 <span className="po-status-dot" style={{ background: STATUS_META[entry.status]?.dot }}></span>
                                 <span className={`po-status-txt ${STATUS_META[entry.status]?.cls}`}>
