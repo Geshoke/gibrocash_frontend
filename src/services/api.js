@@ -59,6 +59,7 @@ export const imprestService = {
   getAdminTotals: () => api.get('/adminSummaries'),
   assignUser: (imprestId, userId) => api.post(`/imprests/${imprestId}/users`, { userId }),
   removeUser: (imprestId, userId) => api.delete(`/imprests/${imprestId}/users/${userId}`),
+  findOrCreateExpenses: (data) => api.post('/imprests/expenses', data),
 };
 
 // Transaction endpoints
@@ -143,6 +144,10 @@ export const payoutService = {
   // Body: { payoutId, pin }
   authorise: (payoutId, pin) =>
     paybillApi.post('/shortcode_3576329/payouts/authorise', { payoutId, pin }),
+
+  // Poll status of a specific B2C payment by originatorConversationId
+  checkB2cStatus: (originatorConversationId) =>
+    paybillApi.get(`/shortcode_3576329/b2c/payments/status/${originatorConversationId}`),
 
   // Fetch persisted B2C payment ledger from DB
   getPayments: () =>

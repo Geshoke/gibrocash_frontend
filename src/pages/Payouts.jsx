@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
-import { payoutService, imprestService, transactionService, imageService } from '../services/api';
+import { payoutService, imprestService, transactionService, imageService, projectService } from '../services/api';
 import './Payouts.css';
 
 // ── Constants ──────────────────────────────────────────────────
@@ -120,10 +120,17 @@ const Payouts = () => {
   const [history, setHistory]   = useState([]);
   const [expanded, setExpanded] = useState(null);
 
+  // ── Projects ─────────────────────────────────────────────────
+  const [projects, setProjects]             = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectSearch, setProjectSearch]   = useState('');
+  const [projectOpen, setProjectOpen]       = useState(false);
+  const projectRef                          = useRef(null);
+
   // ── Transaction Payout ───────────────────────────────────────
   const [imprests, setImprests]             = useState([]);
   const [imprestsLoading, setImprestsLoading] = useState(false);
-  const [txnPayout, setTxnPayout]           = useState({ imprestId: '', contact: '', amount: '', description: '' });
+  const [txnPayout, setTxnPayout]           = useState({ projectId: '', imprestId: '', contact: '', amount: '', description: '' });
   const [imprestSearch, setImprestSearch]   = useState('');
   const [imprestOpen, setImprestOpen]       = useState(false);
   const imprestRef                          = useRef(null);
@@ -131,11 +138,16 @@ const Payouts = () => {
   const [txnSuccess, setTxnSuccess]         = useState('');
 
   // ── PIN modal step 2 — record transaction ───────────────────
-  const [modalStep, setModalStep]         = useState('pin'); // 'pin' | 'record'
-  const [txnForm, setTxnForm]             = useState({ item: '', quantity: '1', unitPrice: '', vatEnabled: false });
+  const [modalStep, setModalStep]         = useState('pin'); // 'pin' | 'polling' | 'record' | 'failed'
+  const [txnForm, setTxnForm]             = useState({ item: '', vatEnabled: false });
   const [txnImageFile, setTxnImageFile]   = useState(null);
   const [txnSaving, setTxnSaving]         = useState(false);
   const [txnFormError, setTxnFormError]   = useState('');
+
+  // ── B2C polling ───────────────────────────────────────────────
+  const [ocid, setOcid]               = useState(null);
+  const [pollingError, setPollingError] = useState('');
+  const pollRef                         = useRef(null);
 
   // ── Failed imprest-transaction ledger (localStorage) ────────
   const [failedTxns, setFailedTxns] = useState(() => {
@@ -230,6 +242,17 @@ const Payouts = () => {
     localStorage.setItem('gibrocash_failed_txns', JSON.stringify(failedTxns));
   }, [failedTxns]);
 
+  // Close project dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (projectRef.current && !projectRef.current.contains(e.target)) {
+        setProjectOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   // Close imprest dropdown on outside click
   useEffect(() => {
     const handler = (e) => {
@@ -240,6 +263,17 @@ const Payouts = () => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Load projects when Transaction Payout view is opened
+  useEffect(() => {
+    if (view !== 'txn_payout') return;
+    if (projects.length > 0) return;
+    setProjectsLoading(true);
+    projectService.getAll()
+      .then(({ data }) => setProjects(data.projects || []))
+      .catch(() => {})
+      .finally(() => setProjectsLoading(false));
+  }, [view]); // eslint-disable-line
 
   // Load imprests when Transaction Payout view is opened
   useEffect(() => {
@@ -273,6 +307,54 @@ const Payouts = () => {
   }, [view]); // eslint-disable-line
 
   useEffect(() => { modalRef.current = modal; }, [modal]);
+
+  // B2C status polling — runs while modalStep === 'polling'
+  useEffect(() => {
+    if (modalStep !== 'polling' || !ocid) return;
+
+    const resolveImprestAndProceed = async () => {
+      const m = modalRef.current;
+      let imprest = m?.payload?.imprest || null;
+
+      if (!imprest && m?.payload?.projectId) {
+        try {
+          const { data } = await imprestService.findOrCreateExpenses({
+            project_id: m.payload.projectId,
+            amount: m.amount,
+            createdBy: user.id,
+          });
+          const proj = projects.find(p => p.id === m.payload.projectId);
+          imprest = { id: data.imprest.id, name: 'Expenses', projectName: proj?.name || null };
+          setModal(prev => ({ ...prev, payload: { ...prev.payload, imprest } }));
+        } catch {
+          setPollingError('Payment succeeded but could not create expense record.');
+          setModalStep('failed');
+          return;
+        }
+      }
+
+      setTxnForm({ item: m?.payload?.description || '', vatEnabled: false });
+      setTxnImageFile(null);
+      setTxnFormError('');
+      setModalStep('record');
+    };
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const { data } = await payoutService.checkB2cStatus(ocid);
+        if (data.status === 'success') {
+          clearInterval(pollRef.current);
+          await resolveImprestAndProceed();
+        } else if (data.status === 'failed' || data.status === 'timeout') {
+          clearInterval(pollRef.current);
+          setPollingError(data.resultDesc || 'Payment failed or timed out by Safaricom.');
+          setModalStep('failed');
+        }
+      } catch { /* network blip — keep polling */ }
+    }, 3000);
+
+    return () => clearInterval(pollRef.current);
+  }, [modalStep, ocid]); // eslint-disable-line
 
   useEffect(() => {
     if (!modal || pinExpired) return;
@@ -314,15 +396,17 @@ const Payouts = () => {
     setPinError('');
     const m = { ...modal };
     try {
-      await payoutService.authorise(m.payoutId, pin);
+      const authResponse = await payoutService.authorise(m.payoutId, pin);
 
-      // Transaction Payout: don't close — move to step 2 (record transaction)
+      // Transaction Payout: move to polling — wait for Safaricom B2C confirmation
       if (m.type === 'txn_payout') {
         clearInterval(timerRef.current);
         setPin(''); setPinError('');
-        setTxnForm({ item: '', quantity: '1', unitPrice: '', vatEnabled: false });
-        setTxnImageFile(null); setTxnFormError('');
-        setModalStep('record');
+        setPollingError('');
+        // authorise returns { success, result: { originatorConversationId, conversationId } }
+        const originatorConversationId = authResponse?.data?.result?.originatorConversationId || null;
+        setOcid(originatorConversationId);
+        setModalStep('polling');
         setSubmitting(false);
         return;
       }
@@ -525,9 +609,10 @@ const Payouts = () => {
 
   // ── Transaction Payout handlers ──────────────────────────────
   const submitTxnPayout = async () => {
-    const { imprestId, contact, amount, description } = txnPayout;
-    if (!imprestId || !contact.trim() || !amount || txnRequesting) return;
-    const selectedImprest = imprests.find(i => String(i.id) === String(imprestId));
+    const { projectId, imprestId, contact, amount, description } = txnPayout;
+    if ((!projectId && !imprestId) || !contact.trim() || !amount || txnRequesting) return;
+    const selectedImprest = imprestId ? imprests.find(i => String(i.id) === String(imprestId)) : null;
+    const selectedProject = projectId ? projects.find(p => p.id === projectId) : null;
     const label  = `Payment to ${contact}`;
     const amt    = parseFloat(amount) || 0;
     const payload = { phoneNumber: normalizePhone(contact), amount: amt, remarks: description || 'Transaction Payout' };
@@ -535,7 +620,11 @@ const Payouts = () => {
     try {
       const { data } = await payoutService.request({ type: 'single', payload, label, amount: amt, initiatedBy: user.name });
       setModalStep('pin');
-      openModal('txn_payout', label, amt, { ...txnPayout, imprest: selectedImprest }, data.payoutId);
+      openModal('txn_payout', label, amt, {
+        ...txnPayout,
+        project: selectedProject,
+        imprest: selectedImprest || null,
+      }, data.payoutId);
     } catch {
       alert('Failed to initiate payout. Please try again.');
     } finally {
@@ -546,19 +635,21 @@ const Payouts = () => {
   const cancelRecord = () => {
     if (!window.confirm('The payout succeeded. Cancel transaction recording? It will be saved to Action Required for retry.')) return;
     const m = modal;
-    const { vat, total } = getTxnTotals(txnForm);
+    const payoutAmt = m.amount || 0;
+    const vat = txnForm.vatEnabled ? parseFloat((payoutAmt * VAT_RATE).toFixed(2)) : 0;
+    const total = parseFloat((payoutAmt + vat).toFixed(2));
     const entry = {
       id: Date.now().toString(),
       createdAt: new Date().toISOString(),
       payoutLabel: m.label,
-      payoutAmount: m.amount,
-      imprestName: m.payload.imprest.name,
-      imprestProject: m.payload.imprest.projectName || null,
+      payoutAmount: payoutAmt,
+      imprestName: m.payload.imprest?.name || 'Expenses',
+      imprestProject: m.payload.imprest?.projectName || null,
       transactionData: {
-        imprestAccount_id: m.payload.imprest.id,
+        imprestAccount_id: m.payload.imprest?.id,
         item: txnForm.item.trim(),
-        itemQuantity: parseFloat(txnForm.quantity) || 1,
-        unitPrice: parseFloat(txnForm.unitPrice) || 0,
+        itemQuantity: 1,
+        unitPrice: payoutAmt,
         Total_amount: total,
         userID: user.id,
         vat_charged: vat,
@@ -572,41 +663,41 @@ const Payouts = () => {
 
   const handleSaveTxnRecord = async () => {
     if (txnSaving) return;
-    const { item, quantity, unitPrice } = txnForm;
-    const { vat, total } = getTxnTotals(txnForm);
+    const { item } = txnForm;
     const imprest = modal?.payload?.imprest;
+    const payoutAmt = modal?.amount || 0;
+    const vat = txnForm.vatEnabled ? parseFloat((payoutAmt * VAT_RATE).toFixed(2)) : 0;
+    const total = parseFloat((payoutAmt + vat).toFixed(2));
 
-    if (!item.trim() || !quantity || !unitPrice) {
-      setTxnFormError('Please fill in all required fields.');
-      return;
-    }
-    if (!txnImageFile) {
-      setTxnFormError('Please attach a receipt image.');
+    if (!item.trim()) {
+      setTxnFormError('Please enter a description.');
       return;
     }
 
     setTxnSaving(true);
     setTxnFormError('');
 
-    // 1. Upload receipt
+    // 1. Upload receipt (optional)
     let imageFilename = null;
-    try {
-      const fd = new FormData();
-      fd.append('file', txnImageFile);
-      const { data } = await imageService.upload(fd);
-      imageFilename = data.file;
-    } catch {
-      setTxnFormError('Receipt upload failed. Please try again.');
-      setTxnSaving(false);
-      return;
+    if (txnImageFile) {
+      try {
+        const fd = new FormData();
+        fd.append('file', txnImageFile);
+        const { data } = await imageService.upload(fd);
+        imageFilename = data.file;
+      } catch {
+        setTxnFormError('Receipt upload failed. Please try again.');
+        setTxnSaving(false);
+        return;
+      }
     }
 
     // 2. Create transaction
     const txnData = {
       imprestAccount_id: imprest.id,
       item:              item.trim(),
-      itemQuantity:      parseFloat(quantity),
-      unitPrice:         parseFloat(unitPrice),
+      itemQuantity:      1,
+      unitPrice:         payoutAmt,
       Total_amount:      total,
       userID:            user.id,
       vat_charged:       vat,
@@ -617,19 +708,20 @@ const Payouts = () => {
       await transactionService.create(txnData);
       setModal(null);
       setModalStep('pin');
-      setTxnPayout({ imprestId: '', contact: '', amount: '', description: '' });
-      setTxnForm({ item: '', quantity: '1', unitPrice: '', vatEnabled: false });
+      setTxnPayout({ projectId: '', imprestId: '', contact: '', amount: '', description: '' });
+      setProjectSearch('');
+      setTxnForm({ item: '', vatEnabled: false });
       setTxnImageFile(null);
+      setOcid(null);
       setTxnSuccess('Payout completed and transaction recorded successfully.');
       setTimeout(() => setTxnSuccess(''), 6000);
       fetchLedger();
     } catch {
-      // Save to Action Required ledger
       const entry = {
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
         payoutLabel: modal.label,
-        payoutAmount: modal.amount,
+        payoutAmount: payoutAmt,
         imprestName: imprest.name,
         imprestProject: imprest.projectName || null,
         transactionData: txnData,
@@ -705,7 +797,7 @@ const Payouts = () => {
     }
   };
 
-  const txnPayoutReady = txnPayout.imprestId && txnPayout.contact.trim() && txnPayout.amount;
+  const txnPayoutReady = (txnPayout.projectId || txnPayout.imprestId) && txnPayout.contact.trim() && txnPayout.amount;
 
   // ── Render ───────────────────────────────────────────────────
   return (
@@ -1140,14 +1232,65 @@ const Payouts = () => {
                 <div className="po-panel-header">
                   <div>
                     <h2>Transaction Payout</h2>
-                    <p>Send a payment to an individual and record it against an imprest. Director PIN required.</p>
+                    <p>Send a payment and record it against a project. Director PIN required.</p>
                   </div>
                 </div>
                 <div className="po-form narrow">
                   <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
 
-                  {/* Step 1 — Select imprest */}
-                  <div className="po-txp-section-label">Step 1 — Select Imprest</div>
+                  {/* Step 1 — Select Project */}
+                  <div className="po-txp-section-label">Step 1 — Select Project <span className="po-txp-required">*</span></div>
+                  <div className="po-field" ref={projectRef} style={{ position: 'relative' }}>
+                    <label>Project</label>
+                    {projectsLoading ? (
+                      <div className="po-txp-loading">Loading projects…</div>
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          className="po-txp-search"
+                          placeholder="Search project…"
+                          value={projectSearch}
+                          onFocus={() => setProjectOpen(true)}
+                          onChange={e => {
+                            setProjectSearch(e.target.value);
+                            setProjectOpen(true);
+                            if (txnPayout.projectId) setTxnPayout(p => ({ ...p, projectId: '' }));
+                          }}
+                        />
+                        {projectOpen && (
+                          <div className="po-txp-dropdown">
+                            {projects
+                              .filter(proj => proj.name.toLowerCase().includes(projectSearch.toLowerCase()))
+                              .map(proj => (
+                                <div
+                                  key={proj.id}
+                                  className={`po-txp-option${txnPayout.projectId === proj.id ? ' selected' : ''}`}
+                                  onMouseDown={() => {
+                                    setTxnPayout(p => ({ ...p, projectId: proj.id }));
+                                    setProjectSearch(proj.name);
+                                    setProjectOpen(false);
+                                  }}
+                                >
+                                  <div className="po-txp-opt-name">{proj.name}</div>
+                                  <div className="po-txp-opt-bal">{proj.status}</div>
+                                </div>
+                              ))
+                            }
+                            {projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase())).length === 0 && (
+                              <div className="po-txp-no-results">No projects match your search</div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {txnPayout.projectId && !txnPayout.imprestId && (
+                      <p className="po-txp-hint">No imprest selected — expense will be recorded in the project's Expenses account.</p>
+                    )}
+                  </div>
+
+                  {/* Step 2 — Select Imprest (optional) */}
+                  <div className="po-txp-section-label">Step 2 — Select Imprest <span className="po-txp-optional">(optional)</span></div>
                   <div className="po-field" ref={imprestRef} style={{ position: 'relative' }}>
                     <label>Imprest Account</label>
                     {imprestsLoading ? (
@@ -1157,13 +1300,12 @@ const Payouts = () => {
                         <input
                           type="text"
                           className="po-txp-search"
-                          placeholder="Search imprest…"
+                          placeholder="Search imprest… (leave blank to use project Expenses)"
                           value={imprestSearch}
                           onFocus={() => setImprestOpen(true)}
                           onChange={e => {
                             setImprestSearch(e.target.value);
                             setImprestOpen(true);
-                            // clear selection when user starts typing a new search
                             if (txnPayout.imprestId) setTxnPayout(p => ({ ...p, imprestId: '' }));
                           }}
                         />
@@ -1204,8 +1346,8 @@ const Payouts = () => {
                     )}
                   </div>
 
-                  {/* Step 2 — Payment details */}
-                  <div className="po-txp-section-label">Step 2 — Payment Details</div>
+                  {/* Step 3 — Payment details */}
+                  <div className="po-txp-section-label">Step 3 — Payment Details</div>
                   <div className="po-field">
                     <label>Recipient Phone Number</label>
                     <input
@@ -1229,15 +1371,18 @@ const Payouts = () => {
                     <textarea
                       value={txnPayout.description}
                       onChange={e => setTxnPayout(p => ({ ...p, description: e.target.value }))}
-                      placeholder="e.g. Payment for plumbing services"
-                      rows={3}
+                      placeholder="e.g. Payment for plumbing services — Site B, Block 3"
+                      rows={4}
                     />
                   </div>
 
-                  {txnPayout.contact && txnPayout.amount && txnPayout.imprestId && (
+                  {txnPayout.contact && txnPayout.amount && (txnPayout.projectId || txnPayout.imprestId) && (
                     <div className="po-preview">
                       Sending <strong>{fmtCur(txnPayout.amount)}</strong> to <strong>{txnPayout.contact}</strong>
-                      {' '}— will be recorded in <strong>{imprests.find(i => String(i.id) === String(txnPayout.imprestId))?.name}</strong>
+                      {txnPayout.imprestId
+                        ? <> — recorded in <strong>{imprests.find(i => String(i.id) === String(txnPayout.imprestId))?.name}</strong></>
+                        : <> — recorded in <strong>{projects.find(p => p.id === txnPayout.projectId)?.name} / Expenses</strong></>
+                      }
                     </div>
                   )}
 
@@ -1249,6 +1394,9 @@ const Payouts = () => {
                     >
                       {txnRequesting ? 'Sending SMS…' : 'Initiate Transaction Payout'}
                     </button>
+                    {!txnPayout.projectId && !txnPayout.imprestId && (
+                      <span className="po-hint">Select a project or imprest to continue</span>
+                    )}
                   </div>
                 </div>
               </>
@@ -1409,46 +1557,85 @@ const Payouts = () => {
         }}>
           <div className={`pin-modal${modalStep === 'record' ? ' wide' : ''}`}>
             <div className="pin-modal-head">
-              <div className="pin-lock-icon">{modalStep === 'record' ? '🧾' : pinExpired ? '⏰' : '🔐'}</div>
-              <h2>{modalStep === 'record' ? 'Record Transaction' : pinExpired ? 'Approval Window Closed' : 'Director Approval Required'}</h2>
+              <div className="pin-lock-icon">
+                {modalStep === 'record' ? '🧾' : modalStep === 'polling' ? '⏳' : modalStep === 'failed' ? '❌' : pinExpired ? '⏰' : '🔐'}
+              </div>
+              <h2>
+                {modalStep === 'record' ? 'Record Transaction'
+                  : modalStep === 'polling' ? 'Processing Payment'
+                  : modalStep === 'failed' ? 'Payment Failed'
+                  : pinExpired ? 'Approval Window Closed'
+                  : 'Director Approval Required'}
+              </h2>
             </div>
             <div className="pin-modal-body">
 
-              {/* ── Step 2: Transaction record form ──────── */}
+              {/* ── Polling: waiting for Safaricom confirmation ── */}
+              {modalStep === 'polling' && (
+                <>
+                  <p className="pin-desc">
+                    PIN authorised. Waiting for Safaricom to confirm the payment…
+                  </p>
+                  <div className="po-polling-spinner">
+                    <div className="po-spinner"></div>
+                    <span>Checking payment status</span>
+                  </div>
+                  <div className="pin-payout-summary" style={{ marginTop: 16 }}>
+                    <div className="pin-summary-row">
+                      <span className="psr-label">Amount</span>
+                      <span className="psr-amount">{fmtCur(modal?.amount)}</span>
+                    </div>
+                    <div className="pin-summary-row">
+                      <span className="psr-label">Recipient</span>
+                      <span className="psr-val">{modal?.payload?.contact}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* ── Failed: payment did not go through ─────── */}
+              {modalStep === 'failed' && (
+                <div className="pin-expired-body">
+                  <p>{pollingError || 'The payment was not completed by Safaricom.'}</p>
+                  <p>No transaction has been recorded. Please try again.</p>
+                  <button className="pin-cancel-btn" onClick={() => { setModal(null); setModalStep('pin'); setOcid(null); }}>
+                    Close
+                  </button>
+                </div>
+              )}
+
+              {/* ── Record: simplified transaction form ──────── */}
               {modalStep === 'record' && (
                 <>
                   <p className="pin-desc">
-                    Payout authorised. Fill in the transaction details and attach the receipt to record it in the imprest.
+                    Payment confirmed by Safaricom. Describe what this payment was for.
                   </p>
                   <div className="po-txn-record-form">
+
+                    {/* Imprest context */}
+                    {modal?.payload?.imprest && (
+                      <div className="po-txn-context">
+                        <span className="po-txn-ctx-label">Recording in</span>
+                        <span className="po-txn-ctx-value">
+                          {modal.payload.imprest.name}
+                          {modal.payload.imprest.projectName ? ` · ${modal.payload.imprest.projectName}` : ''}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="po-txn-total-row grand" style={{ marginBottom: 12 }}>
+                      <span>Payout Amount</span><span>{fmtCur(modal?.amount)}</span>
+                    </div>
+
                     <div className="po-field">
-                      <label>Item / Description *</label>
-                      <input
-                        type="text"
+                      <label>Description *</label>
+                      <textarea
                         value={txnForm.item}
                         onChange={e => setTxnForm(p => ({ ...p, item: e.target.value }))}
-                        placeholder="e.g. Plumbing materials"
+                        placeholder="e.g. Payment for plumbing services — Site B, Block 3"
+                        rows={4}
+                        style={{ resize: 'vertical' }}
                       />
-                    </div>
-                    <div className="po-txn-row">
-                      <div className="po-field">
-                        <label>Quantity *</label>
-                        <input
-                          type="number"
-                          value={txnForm.quantity}
-                          onChange={e => setTxnForm(p => ({ ...p, quantity: e.target.value }))}
-                          min="1" step="1" placeholder="1"
-                        />
-                      </div>
-                      <div className="po-field">
-                        <label>Unit Price (KES) *</label>
-                        <input
-                          type="number"
-                          value={txnForm.unitPrice}
-                          onChange={e => setTxnForm(p => ({ ...p, unitPrice: e.target.value }))}
-                          min="0" step="0.01" placeholder="0.00"
-                        />
-                      </div>
                     </div>
 
                     {/* VAT toggle */}
@@ -1463,36 +1650,24 @@ const Payouts = () => {
                       </button>
                     </div>
 
-                    {/* Totals breakdown */}
-                    {(() => {
-                      const { subtotal, vat, total } = getTxnTotals(txnForm);
-                      const payoutAmt = modal?.amount || 0;
-                      const mismatch  = txnForm.quantity && txnForm.unitPrice && total !== payoutAmt;
-                      return (
-                        <div className="po-txn-totals">
-                          <div className="po-txn-total-row">
-                            <span>Subtotal</span><span>{fmtCur(subtotal)}</span>
-                          </div>
-                          {txnForm.vatEnabled && (
-                            <div className="po-txn-total-row vat">
-                              <span>VAT (16%)</span><span>{fmtCur(vat)}</span>
-                            </div>
-                          )}
-                          <div className={`po-txn-total-row grand${mismatch ? ' mismatch' : ''}`}>
-                            <span>Total</span><span>{fmtCur(total)}</span>
-                          </div>
-                          {mismatch && (
-                            <div className="po-txn-mismatch">
-                              Payout was {fmtCur(payoutAmt)} — total does not match
-                            </div>
-                          )}
+                    {txnForm.vatEnabled && (
+                      <div className="po-txn-totals">
+                        <div className="po-txn-total-row">
+                          <span>Payout</span><span>{fmtCur(modal?.amount)}</span>
                         </div>
-                      );
-                    })()}
+                        <div className="po-txn-total-row vat">
+                          <span>VAT (16%)</span><span>{fmtCur(parseFloat(((modal?.amount || 0) * VAT_RATE).toFixed(2)))}</span>
+                        </div>
+                        <div className="po-txn-total-row grand">
+                          <span>Total Recorded</span>
+                          <span>{fmtCur(parseFloat(((modal?.amount || 0) * (1 + VAT_RATE)).toFixed(2)))}</span>
+                        </div>
+                      </div>
+                    )}
 
-                    {/* Receipt upload */}
+                    {/* Receipt upload (optional) */}
                     <div className="po-field">
-                      <label>Receipt Image *</label>
+                      <label>Receipt Image <span className="po-label-opt">(optional)</span></label>
                       <label className={`po-drop-zone ${txnImageFile ? 'loaded' : ''}`}>
                         <span className="po-drop-icon">{txnImageFile ? '✅' : '🧾'}</span>
                         <span className="po-drop-main">{txnImageFile ? txnImageFile.name : 'Click to attach receipt'}</span>

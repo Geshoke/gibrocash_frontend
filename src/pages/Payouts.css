@@ -1055,3 +1055,50 @@
   .po-nav-panel { grid-template-columns: repeat(2, 1fr); }
   .pin-modal    { margin: 16px; }
 }
+
+/* ── Transaction Payout — project/imprest labels ─────────────── */
+.po-txp-required { color: #dc2626; font-size: 0.8rem; margin-left: 4px; }
+.po-txp-optional { color: #6b7280; font-size: 0.8rem; font-weight: 400; margin-left: 4px; }
+.po-txp-hint     { margin: 4px 0 0; font-size: 0.78rem; color: #2563eb; }
+
+/* ── B2C polling spinner ──────────────────────────────────────── */
+.po-polling-spinner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+.po-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: po-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes po-spin { to { transform: rotate(360deg); } }
+
+/* ── Transaction record — context row ────────────────────────── */
+.po-txn-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.po-txn-ctx-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+.po-txn-ctx-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+}
