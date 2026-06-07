@@ -344,9 +344,11 @@ const Payouts = () => {
         const { data } = await payoutService.checkB2cStatus(ocid);
         if (data.status === 'success') {
           clearInterval(pollRef.current);
+          fetchLedger(); // update ledger immediately on confirmed success
           await resolveImprestAndProceed();
         } else if (data.status === 'failed' || data.status === 'timeout') {
           clearInterval(pollRef.current);
+          fetchLedger();
           setPollingError(data.resultDesc || 'Payment failed or timed out by Safaricom.');
           setModalStep('failed');
         }
@@ -1598,7 +1600,7 @@ const Payouts = () => {
                 <div className="pin-expired-body">
                   <p>{pollingError || 'The payment was not completed by Safaricom.'}</p>
                   <p>No transaction has been recorded. Please try again.</p>
-                  <button className="pin-cancel-btn" onClick={() => { setModal(null); setModalStep('pin'); setOcid(null); }}>
+                  <button className="pin-cancel-btn" onClick={() => { setModal(null); setModalStep('pin'); setOcid(null); fetchLedger(); }}>
                     Close
                   </button>
                 </div>

@@ -21,8 +21,11 @@ const Transactions = () => {
   // ── Detail panel ──────────────────────────────────────────────
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [transactionImageUrl, setTransactionImageUrl] = useState(null);
-  const [loadingImage, setLoadingImage] = useState(false);
-  const [imageError, setImageError]     = useState('');
+  const [loadingImage, setLoadingImage]   = useState(false);
+  const [imageError, setImageError]       = useState('');
+  const [hasNoReceipt, setHasNoReceipt]   = useState(false);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [receiptUploadError, setReceiptUploadError] = useState('');
 
   // ── Categories ────────────────────────────────────────────────
   const [categories, setCategories]                   = useState([]);
@@ -131,15 +134,12 @@ const Transactions = () => {
 
   // ── Transaction detail ────────────────────────────────────────
 
-  const handleTransactionClick = async (txn) => {
-    if (selectedTransaction?.id === txn.id) return;
-    setSelectedTransaction(txn);
+  const loadTransactionImage = async (txn) => {
     setTransactionImageUrl(null);
     setImageError('');
-    setCategoryPopoverOpen(false);
-    setEditMode(false);
+    setHasNoReceipt(false);
 
-    if (!txn.images_id) return;
+    if (!txn.images_id) { setHasNoReceipt(true); return; }
     try {
       setLoadingImage(true);
       const response = await imageService.getTransactionImage(txn.images_id);
@@ -147,13 +147,40 @@ const Transactions = () => {
       if (imagePath) {
         setTransactionImageUrl(imageService.getImageUrl(imagePath));
       } else {
-        setImageError('No image path returned from server');
+        setHasNoReceipt(true);
       }
     } catch (err) {
       console.error('Failed to load transaction image:', err);
       setImageError('Failed to load image: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoadingImage(false);
+    }
+  };
+
+  const handleTransactionClick = async (txn) => {
+    if (selectedTransaction?.id === txn.id) return;
+    setSelectedTransaction(txn);
+    setReceiptUploadError('');
+    setCategoryPopoverOpen(false);
+    setEditMode(false);
+    loadTransactionImage(txn);
+  };
+
+  const handleReceiptUpload = async (file) => {
+    if (!file || !selectedTransaction) return;
+    setUploadingReceipt(true);
+    setReceiptUploadError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await transactionService.uploadReceipt(selectedTransaction.id, fd);
+      // Refresh the image after successful upload
+      await loadTransactionImage(selectedTransaction);
+    } catch (err) {
+      console.error('Receipt upload failed:', err);
+      setReceiptUploadError('Upload failed. Please try again.');
+    } finally {
+      setUploadingReceipt(false);
     }
   };
 
@@ -532,10 +559,27 @@ const Transactions = () => {
                           <div className="spinner"></div>
                           <p>Loading receipt...</p>
                         </div>
-                      ) : !selectedTransaction.images_id ? (
-                        <p className="no-image-message">No receipt attached.</p>
                       ) : imageError ? (
                         <p className="image-error-message">{imageError}</p>
+                      ) : hasNoReceipt ? (
+                        <div className="txn-receipt-upload">
+                          <label className={`txn-receipt-dropzone${uploadingReceipt ? ' uploading' : ''}`}>
+                            <span className="txn-receipt-dz-icon">{uploadingReceipt ? '⏳' : '🧾'}</span>
+                            <span className="txn-receipt-dz-main">
+                              {uploadingReceipt ? 'Uploading…' : 'No receipt — click to upload'}
+                            </span>
+                            <span className="txn-receipt-dz-hint">PNG or PDF accepted</span>
+                            <input
+                              type="file"
+                              accept="image/png,.pdf,application/pdf"
+                              disabled={uploadingReceipt}
+                              onChange={e => handleReceiptUpload(e.target.files[0] || null)}
+                            />
+                          </label>
+                          {receiptUploadError && (
+                            <p className="image-error-message">{receiptUploadError}</p>
+                          )}
+                        </div>
                       ) : transactionImageUrl ? (
                         transactionImageUrl.toLowerCase().endsWith('.pdf') ? (
                           <iframe src={transactionImageUrl} title="Receipt" className="pdf-preview" />

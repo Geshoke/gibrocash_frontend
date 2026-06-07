@@ -716,3 +716,28 @@
 }
 .txn-edit-save-btn:hover { background: #2b6cb0; }
 .txn-edit-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ── Receipt upload drop zone ─────────────────────────────────── */
+.txn-receipt-upload { width: 100%; }
+
+.txn-receipt-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 24px 16px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.txn-receipt-dropzone:hover { border-color: #2563eb; background: #eff6ff; }
+.txn-receipt-dropzone.uploading { opacity: 0.6; cursor: not-allowed; }
+.txn-receipt-dropzone input[type="file"] { display: none; }
+
+.txn-receipt-dz-icon { font-size: 1.8rem; }
+.txn-receipt-dz-main { font-size: 0.875rem; font-weight: 600; color: #334155; }
+.txn-receipt-dz-hint { font-size: 0.75rem; color: #94a3b8; }

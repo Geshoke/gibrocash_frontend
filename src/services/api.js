@@ -80,6 +80,9 @@ export const transactionService = {
   getByImprest: (imprestID) => api.get(`/imprestAccount_trnsctns/${imprestID}`),
   delete: (transactionID) => api.delete(`/create_transaction/${transactionID}`),
   update: (id, data) => api.patch(`/transactions/${id}`, data),
+  uploadReceipt: (id, formData) => api.patch(`/transactions/${id}/receipt`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
 };
 
 // Category endpoints
