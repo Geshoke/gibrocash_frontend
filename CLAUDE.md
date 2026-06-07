@@ -53,3 +53,8 @@ No test framework is currently configured.
 
 ### Currency/Locale
 - All amounts formatted as Kenyan Shillings (KES) using `Intl.NumberFormat('en-KE')`
+
+## Editing Rules
+
+**Always read before editing.**
+Before appending to or editing any file — especially controllers, route files, or any file with nested object/class structure — read the full end of the file first. Object closing braces (`}`) and `module.exports` lines are easily misread when only scanning partially. Placing new methods outside a containing object due to not reading the closing structure is a known failure mode in this codebase.
