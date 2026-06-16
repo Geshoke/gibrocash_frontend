@@ -43,6 +43,7 @@ export const AuthProvider = ({ children }) => {
       super_admin: userData.super_admin ?? false,
       view_all_imprests: profile?.view_all_imprests ?? false,
       edit_transactions: profile?.edit_transactions ?? false,
+      create_invoices: profile?.create_invoices ?? false,
     };
 
     localStorage.setItem('user', JSON.stringify(userObj));
@@ -77,6 +78,10 @@ export const AuthProvider = ({ children }) => {
     return user?.edit_transactions === true;
   };
 
+  const canCreateInvoices = () => {
+    return user?.create_invoices === true;
+  };
+
   const value = {
     user,
     login,
@@ -86,6 +91,7 @@ export const AuthProvider = ({ children }) => {
     canPayout,
     canViewAllImprests,
     canEditTransactions,
+    canCreateInvoices,
     isAuthenticated: !!user,
     loading,
   };

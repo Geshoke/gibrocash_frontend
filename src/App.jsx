@@ -11,6 +11,9 @@ import Projects from './pages/Projects';
 import Payouts from './pages/Payouts';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
+import Invoices from './pages/Invoices';
+import InvoiceForm from './pages/InvoiceForm';
+import InvoiceView from './pages/InvoiceView';
 import './App.css';
 
 function App() {
@@ -81,6 +84,38 @@ function App() {
             element={
               <ProtectedRoute>
                 <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/invoices"
+            element={
+              <ProtectedRoute require="invoice">
+                <Invoices />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/invoices/new"
+            element={
+              <ProtectedRoute require="invoice">
+                <InvoiceForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/invoices/:id/edit"
+            element={
+              <ProtectedRoute require="invoice">
+                <InvoiceForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/invoices/:id"
+            element={
+              <ProtectedRoute require="invoice">
+                <InvoiceView />
               </ProtectedRoute>
             }
           />

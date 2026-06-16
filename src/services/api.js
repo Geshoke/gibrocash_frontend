@@ -49,6 +49,7 @@ export const userService = {
   toggleSuperAdmin: (id, super_admin) => api.patch(`/users/${id}/super-admin`, { super_admin }),
   toggleViewAllImprests: (id, view_all_imprests) => api.patch(`/users/${id}/view-all-imprests`, { view_all_imprests }),
   toggleEditTransactions: (id, edit_transactions) => api.patch(`/users/${id}/edit-transactions`, { edit_transactions }),
+  toggleCreateInvoices: (id, create_invoices) => api.patch(`/users/${id}/create-invoices`, { create_invoices }),
 };
 
 // Imprest endpoints
@@ -159,6 +160,24 @@ export const payoutService = {
   // Fetch persisted B2B payment ledger from DB
   getB2bPayments: () =>
     paybillApi.get('/shortcode_3576329/b2b/payments'),
+};
+
+// Invoice endpoints
+export const invoiceService = {
+  create: (data) => api.post('/invoices', data),
+  getAll: (params) => api.get('/invoices', { params }),
+  getById: (id) => api.get(`/invoices/${id}`),
+  update: (id, data) => api.patch(`/invoices/${id}`, data),
+  updateStatus: (id, status) => api.patch(`/invoices/${id}/status`, { status }),
+  delete: (id) => api.delete(`/invoices/${id}`),
+};
+
+// Invoice catalog endpoints
+export const catalogService = {
+  getAll: () => api.get('/invoice-catalog'),
+  create: (data) => api.post('/invoice-catalog', data),
+  update: (id, data) => api.patch(`/invoice-catalog/${id}`, data),
+  delete: (id) => api.delete(`/invoice-catalog/${id}`),
 };
 
 export default api;

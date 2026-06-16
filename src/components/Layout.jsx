@@ -5,7 +5,7 @@ import APP_VERSION from '../version';
 import './Layout.css';
 
 const Layout = ({ children }) => {
-  const { user, logout, isSuperAdmin, canPayout } = useAuth();
+  const { user, logout, isSuperAdmin, canPayout, canCreateInvoices } = useAuth();
   const location = useLocation();
 
   const navItems = [
@@ -16,6 +16,9 @@ const Layout = ({ children }) => {
     { path: '/proposals', label: 'Proposals', icon: '📋' },
   ];
 
+  if (canCreateInvoices()) {
+    navItems.push({ path: '/invoices', label: 'Invoices', icon: '🧾' });
+  }
   if (canPayout()) {
     navItems.push({ path: '/payouts', label: 'Payouts', icon: '💸' });
   }

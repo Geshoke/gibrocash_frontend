@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const ProtectedRoute = ({ children, require }) => {
-  const { isAuthenticated, loading, isSuperAdmin, canPayout } = useAuth();
+  const { isAuthenticated, loading, isSuperAdmin, canPayout, canCreateInvoices } = useAuth();
 
   if (loading) {
     return (
@@ -26,6 +26,10 @@ const ProtectedRoute = ({ children, require }) => {
   }
 
   if (require === 'payout' && !canPayout()) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (require === 'invoice' && !canCreateInvoices()) {
     return <Navigate to="/dashboard" replace />;
   }
 
