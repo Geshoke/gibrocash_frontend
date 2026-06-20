@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { transactionService, imageService, categoryService } from '../services/api';
+import { transactionService, imageService, categoryService, imprestService } from '../services/api';
 import Layout from '../components/Layout';
 import './Transactions.css';
 
@@ -8,7 +8,7 @@ const LIMIT = 50;
 const EMPTY_FILTERS = { search: '', from_date: '', to_date: '', category_id: '' };
 
 const Transactions = () => {
-  const { user, canViewAllImprests, canEditTransactions } = useAuth();
+  const { user, canViewAllImprests, canEditTransactions, canMoveTransactions } = useAuth();
 
   // ── Data ──────────────────────────────────────────────────────
   const [transactions, setTransactions] = useState([]);
@@ -36,6 +36,16 @@ const Transactions = () => {
   const [editForm, setEditForm]     = useState({ item: '', quantity: '', unitPrice: '', vat_charged: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError]   = useState('');
+
+  // ── Move to imprest ───────────────────────────────────────────
+  const [allImprests, setAllImprests]     = useState([]);
+  const [moveImprestId, setMoveImprestId] = useState('');
+  const [moveSearch, setMoveSearch]       = useState('');
+  const [moveDropdownOpen, setMoveDropdownOpen] = useState(false);
+  const [moveSaving, setMoveSaving]       = useState(false);
+  const [moveError, setMoveError]         = useState('');
+  const [moveSuccess, setMoveSuccess]     = useState('');
+  const moveComboRef = useRef(null);
 
   // ── Filters ───────────────────────────────────────────────────
   // inputValues: what's currently in the inputs (not yet applied)
@@ -65,6 +75,17 @@ const Transactions = () => {
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);
   }, [categoryPopoverOpen]);
+
+  useEffect(() => {
+    if (!moveDropdownOpen) return;
+    const close = (e) => {
+      if (moveComboRef.current && !moveComboRef.current.contains(e.target)) {
+        setMoveDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [moveDropdownOpen]);
 
 
   // ── Data fetchers ─────────────────────────────────────────────
@@ -216,7 +237,7 @@ const Transactions = () => {
 
   // ── Edit handlers ─────────────────────────────────────────────
 
-  const openEdit = () => {
+  const openEdit = async () => {
     setEditForm({
       item:        selectedTransaction.item || '',
       quantity:    String(selectedTransaction.quantity ?? ''),
@@ -224,10 +245,52 @@ const Transactions = () => {
       vat_charged: String(selectedTransaction.vat_charged ?? ''),
     });
     setEditError('');
+    setMoveImprestId('');
+    setMoveSearch('');
+    setMoveDropdownOpen(false);
+    setMoveError('');
+    setMoveSuccess('');
     setEditMode(true);
+    if (canMoveTransactions() && allImprests.length === 0) {
+      try {
+        const res = await imprestService.getAllNames();
+        setAllImprests(res.data?.response || []);
+      } catch {
+        // non-fatal — move section just won't have options
+      }
+    }
   };
 
-  const cancelEdit = () => { setEditMode(false); setEditError(''); };
+  const cancelEdit = () => {
+    setEditMode(false);
+    setEditError('');
+    setMoveImprestId('');
+    setMoveSearch('');
+    setMoveDropdownOpen(false);
+    setMoveError('');
+    setMoveSuccess('');
+  };
+
+  const moveTransaction = async () => {
+    if (!moveImprestId) { setMoveError('Please select a destination imprest.'); return; }
+    if (moveImprestId === selectedTransaction.imprest_id) { setMoveError('Transaction is already in this imprest.'); return; }
+    setMoveSaving(true);
+    setMoveError('');
+    setMoveSuccess('');
+    try {
+      await transactionService.move(selectedTransaction.id, moveImprestId);
+      const destImprest = allImprests.find(i => i.id === moveImprestId);
+      const updated = { ...selectedTransaction, imprest_id: moveImprestId, imprest: { ...selectedTransaction.imprest, id: moveImprestId, name: destImprest?.name || '' } };
+      setSelectedTransaction(updated);
+      setTransactions(prev => prev.map(t => t.id === updated.id ? { ...t, imprest_id: moveImprestId, imprest: updated.imprest } : t));
+      setMoveSuccess(`Moved to ${destImprest?.name || 'new imprest'}.`);
+      setMoveImprestId('');
+    } catch {
+      setMoveError('Failed to move transaction. Please try again.');
+    } finally {
+      setMoveSaving(false);
+    }
+  };
 
   const saveEdit = async () => {
     const { item, quantity, unitPrice, vat_charged } = editForm;
@@ -482,6 +545,63 @@ const Transactions = () => {
                           {editSaving ? 'Saving…' : 'Save Changes'}
                         </button>
                       </div>
+
+                      {canMoveTransactions() && (
+                        <div className="txn-move-section">
+                          <span className="txn-detail-label">Move to Imprest</span>
+                          <div className="txn-move-row">
+                            <div className="txn-move-combo" ref={moveComboRef}>
+                              <input
+                                className="txn-edit-input txn-move-search"
+                                type="text"
+                                placeholder="Search imprest…"
+                                value={moveSearch}
+                                onFocus={() => setMoveDropdownOpen(true)}
+                                onChange={e => {
+                                  setMoveSearch(e.target.value);
+                                  setMoveImprestId('');
+                                  setMoveDropdownOpen(true);
+                                  setMoveError('');
+                                  setMoveSuccess('');
+                                }}
+                              />
+                              {moveDropdownOpen && (
+                                <div className="txn-move-dropdown">
+                                  {allImprests.filter(i =>
+                                    i.name.toLowerCase().includes(moveSearch.toLowerCase())
+                                  ).length === 0 ? (
+                                    <span className="txn-move-dropdown-empty">No imprests match</span>
+                                  ) : (
+                                    allImprests
+                                      .filter(i => i.name.toLowerCase().includes(moveSearch.toLowerCase()))
+                                      .map(i => (
+                                        <button
+                                          key={i.id}
+                                          className={`txn-move-dropdown-item${moveImprestId === i.id ? ' selected' : ''}`}
+                                          onMouseDown={e => {
+                                            e.preventDefault();
+                                            setMoveImprestId(i.id);
+                                            setMoveSearch(i.name);
+                                            setMoveDropdownOpen(false);
+                                            setMoveError('');
+                                            setMoveSuccess('');
+                                          }}
+                                        >
+                                          {i.name}
+                                        </button>
+                                      ))
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <button className="txn-move-btn" onClick={moveTransaction} disabled={moveSaving || !moveImprestId}>
+                              {moveSaving ? 'Moving…' : 'Move'}
+                            </button>
+                          </div>
+                          {moveError   && <p className="txn-edit-error">{moveError}</p>}
+                          {moveSuccess && <p className="txn-move-success">{moveSuccess}</p>}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="txn-detail-grid">

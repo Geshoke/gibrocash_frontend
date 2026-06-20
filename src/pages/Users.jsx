@@ -78,6 +78,16 @@ const Users = () => {
     }
   };
 
+  const handleToggleMoveTransactions = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, move_transactions: value } : u));
+    try {
+      await userService.toggleMoveTransactions(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update move transactions:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, move_transactions: !value } : u));
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-KE', {
       year: 'numeric',
@@ -130,6 +140,7 @@ const Users = () => {
                   <th>View All Imprests</th>
                   <th>Edit Transactions</th>
                   <th>Create Invoices</th>
+                  <th>Move Transactions</th>
                 </tr>
               </thead>
               <tbody>
@@ -200,6 +211,17 @@ const Users = () => {
                           type="checkbox"
                           checked={u.create_invoices ?? false}
                           onChange={e => handleToggleCreateInvoices(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.move_transactions ?? false}
+                          onChange={e => handleToggleMoveTransactions(u, e.target.checked)}
                           disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />

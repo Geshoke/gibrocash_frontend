@@ -717,6 +717,78 @@
 .txn-edit-save-btn:hover { background: #2b6cb0; }
 .txn-edit-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+/* ── Move to imprest ──────────────────────────────────────────── */
+.txn-move-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.txn-move-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.txn-move-combo {
+  position: relative;
+  flex: 1;
+}
+.txn-move-search { width: 100%; box-sizing: border-box; }
+.txn-move-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+.txn-move-dropdown-item {
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-primary, #1a202c);
+  transition: background 0.1s;
+}
+.txn-move-dropdown-item:hover,
+.txn-move-dropdown-item.selected { background: var(--hover-bg, #f0f4ff); }
+.txn-move-dropdown-empty {
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  color: var(--text-muted, #718096);
+}
+.txn-move-btn {
+  padding: 8px 16px;
+  background: #38a169;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.txn-move-btn:hover { background: #2f855a; }
+.txn-move-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.txn-move-success {
+  font-size: 0.8rem;
+  color: #2f855a;
+  margin: 0;
+}
+
 /* ── Receipt upload drop zone ─────────────────────────────────── */
 .txn-receipt-upload { width: 100%; }
 

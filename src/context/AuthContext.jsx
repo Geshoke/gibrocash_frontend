@@ -44,6 +44,7 @@ export const AuthProvider = ({ children }) => {
       view_all_imprests: profile?.view_all_imprests ?? false,
       edit_transactions: profile?.edit_transactions ?? false,
       create_invoices: profile?.create_invoices ?? false,
+      move_transactions: profile?.move_transactions ?? false,
     };
 
     localStorage.setItem('user', JSON.stringify(userObj));
@@ -82,6 +83,10 @@ export const AuthProvider = ({ children }) => {
     return user?.create_invoices === true;
   };
 
+  const canMoveTransactions = () => {
+    return user?.move_transactions === true;
+  };
+
   const value = {
     user,
     login,
@@ -92,6 +97,7 @@ export const AuthProvider = ({ children }) => {
     canViewAllImprests,
     canEditTransactions,
     canCreateInvoices,
+    canMoveTransactions,
     isAuthenticated: !!user,
     loading,
   };

@@ -50,12 +50,14 @@ export const userService = {
   toggleViewAllImprests: (id, view_all_imprests) => api.patch(`/users/${id}/view-all-imprests`, { view_all_imprests }),
   toggleEditTransactions: (id, edit_transactions) => api.patch(`/users/${id}/edit-transactions`, { edit_transactions }),
   toggleCreateInvoices: (id, create_invoices) => api.patch(`/users/${id}/create-invoices`, { create_invoices }),
+  toggleMoveTransactions: (id, move_transactions) => api.patch(`/users/${id}/move-transactions`, { move_transactions }),
 };
 
 // Imprest endpoints
 export const imprestService = {
   create: (data) => api.post('/create_imprest', data),
   getByUser: (userID) => api.get(`/getImprests/${userID}`),
+  getAllNames: () => api.get('/imprests/all-names'),
   getAdminSummary: () => api.get('/adminAllImprestSummation'),
   getAdminTotals: () => api.get('/adminSummaries'),
   assignUser: (imprestId, userId) => api.post(`/imprests/${imprestId}/users`, { userId }),
@@ -81,6 +83,7 @@ export const transactionService = {
   getByImprest: (imprestID) => api.get(`/imprestAccount_trnsctns/${imprestID}`),
   delete: (transactionID) => api.delete(`/create_transaction/${transactionID}`),
   update: (id, data) => api.patch(`/transactions/${id}`, data),
+  move: (id, imprest_id) => api.patch(`/transactions/${id}/move`, { imprest_id }),
   uploadReceipt: (id, formData) => api.patch(`/transactions/${id}/receipt`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
