@@ -969,6 +969,85 @@
   text-align: center;
 }
 
+/* ── Panel tabs ──────────────────────────────────────────────── */
+.iip-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.iip-tab {
+  flex: 1;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #718096;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+
+.iip-tab:hover { color: #2d3748; }
+.iip-tab.active { color: #3182ce; border-bottom-color: #3182ce; font-weight: 600; }
+
+/* ── Transactions list inside panel ─────────────────────────── */
+.iip-txn-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.iip-txn-item {
+  padding: 10px 20px;
+  border-bottom: 1px solid #f0f4f8;
+  transition: background 0.1s;
+}
+
+.iip-txn-item:last-child { border-bottom: none; }
+.iip-txn-item:hover { background: #f7fafc; }
+
+.iip-txn-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.iip-txn-name {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #2d3748;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iip-txn-amount {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #c53030;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.iip-txn-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 0.75rem;
+  color: #a0aec0;
+  flex-wrap: wrap;
+}
+
+.iip-txn-cats {
+  color: #3182ce;
+}
+
 .iip-grid {
   flex: 1;
   overflow-y: auto;

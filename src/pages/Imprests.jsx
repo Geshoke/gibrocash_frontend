@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { imprestService, userService, projectService, imageService, proposalService } from '../services/api';
+import { imprestService, userService, projectService, imageService, proposalService, transactionService } from '../services/api';
 import Layout from '../components/Layout';
 import './Imprests.css';
 
@@ -18,6 +18,11 @@ const Imprests = () => {
   const [imprestImages, setImprestImages] = useState([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
+
+  // Panel tabs
+  const [activeTab, setActiveTab] = useState('attachments');
+  const [imprestTransactions, setImprestTransactions] = useState([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
 
   // Proposal modal
   const [proposalModal, setProposalModal] = useState(null);
@@ -86,10 +91,14 @@ const Imprests = () => {
     if (selectedImprest?.id === imprest.id) {
       setSelectedImprest(null);
       setImprestImages([]);
+      setImprestTransactions([]);
+      setActiveTab('attachments');
       return;
     }
     setSelectedImprest(imprest);
+    setActiveTab('attachments');
     setImprestImages([]);
+    setImprestTransactions([]);
     setLoadingImages(true);
     try {
       const res = await imageService.getImageCount(imprest.id);
@@ -101,9 +110,27 @@ const Imprests = () => {
     }
   };
 
+  const handleTabChange = async (tab, imprest) => {
+    setActiveTab(tab);
+    if (tab === 'transactions' && imprestTransactions.length === 0) {
+      setLoadingTransactions(true);
+      try {
+        const res = await transactionService.getByImprest(imprest.id);
+        const rows = res.data?.transactions?.rows || [];
+        setImprestTransactions(rows);
+      } catch (err) {
+        console.error('Failed to load transactions:', err);
+      } finally {
+        setLoadingTransactions(false);
+      }
+    }
+  };
+
   const closeImagesPanel = () => {
     setSelectedImprest(null);
     setImprestImages([]);
+    setImprestTransactions([]);
+    setActiveTab('attachments');
     setLightboxUrl(null);
   };
 
@@ -401,51 +428,84 @@ const Imprests = () => {
             </div>
           </div>
 
-          {/* ── Images panel ── */}
+          {/* ── Detail panel ── */}
           {selectedImprest && (
             <div className="imprests-images-panel">
               <div className="iip-header">
                 <div>
                   <h2>{selectedImprest.name}</h2>
-                  <p>Attachments</p>
+                  <p>{formatCurrency(selectedImprest.amount)} allocated</p>
                 </div>
                 <button className="iip-close-btn" onClick={closeImagesPanel}>×</button>
               </div>
 
-              {loadingImages ? (
-                <div className="iip-loading">
-                  <div className="spinner"></div>
-                </div>
-              ) : imprestImages.length === 0 ? (
-                <div className="iip-empty">
-                  <p>No attachments found for this imprest.</p>
-                </div>
-              ) : (
-                <div className="iip-grid">
-                  {imprestImages.map((img) => {
-                    const url = imageService.getImageUrl(img.url);
-                    return (
-                      <div
-                        key={img.id}
-                        className="iip-thumb"
-                        onClick={() => setLightboxUrl(url)}
-                      >
-                        {isPdf(img.url) ? (
-                          <div className="iip-pdf-thumb">
-                            <span className="iip-pdf-icon">PDF</span>
-                            <span className="iip-pdf-name">{img.url.split('/').pop()}</span>
-                          </div>
-                        ) : (
-                          <img
-                            src={url}
-                            alt={img.url.split('/').pop()}
-                            loading="lazy"
-                          />
-                        )}
+              <div className="iip-tabs">
+                <button
+                  className={`iip-tab${activeTab === 'attachments' ? ' active' : ''}`}
+                  onClick={() => handleTabChange('attachments', selectedImprest)}
+                >
+                  Attachments
+                </button>
+                <button
+                  className={`iip-tab${activeTab === 'transactions' ? ' active' : ''}`}
+                  onClick={() => handleTabChange('transactions', selectedImprest)}
+                >
+                  Transactions
+                </button>
+              </div>
+
+              {activeTab === 'attachments' && (
+                loadingImages ? (
+                  <div className="iip-loading"><div className="spinner"></div></div>
+                ) : imprestImages.length === 0 ? (
+                  <div className="iip-empty"><p>No attachments found for this imprest.</p></div>
+                ) : (
+                  <div className="iip-grid">
+                    {imprestImages.map((img) => {
+                      const url = imageService.getImageUrl(img.url);
+                      return (
+                        <div key={img.id} className="iip-thumb" onClick={() => setLightboxUrl(url)}>
+                          {isPdf(img.url) ? (
+                            <div className="iip-pdf-thumb">
+                              <span className="iip-pdf-icon">PDF</span>
+                              <span className="iip-pdf-name">{img.url.split('/').pop()}</span>
+                            </div>
+                          ) : (
+                            <img src={url} alt={img.url.split('/').pop()} loading="lazy" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+
+              {activeTab === 'transactions' && (
+                loadingTransactions ? (
+                  <div className="iip-loading"><div className="spinner"></div></div>
+                ) : imprestTransactions.length === 0 ? (
+                  <div className="iip-empty"><p>No transactions recorded for this imprest.</p></div>
+                ) : (
+                  <div className="iip-txn-list">
+                    {imprestTransactions.map((txn) => (
+                      <div key={txn.id} className="iip-txn-item">
+                        <div className="iip-txn-main">
+                          <span className="iip-txn-name">{txn.item}</span>
+                          <span className="iip-txn-amount">{formatCurrency(txn.price)}</span>
+                        </div>
+                        <div className="iip-txn-meta">
+                          <span>{formatDate(txn.createdAt)}</span>
+                          {txn.User?.name && <span>by {txn.User.name}</span>}
+                          {(txn.categories || []).length > 0 && (
+                            <span className="iip-txn-cats">
+                              {txn.categories.map(c => c.cat_name).join(', ')}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           )}

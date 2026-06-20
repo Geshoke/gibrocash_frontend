@@ -56,7 +56,7 @@ const STATUS_META = {
 
 const VAT_RATE = 0.16;
 
-const TYPE_LABEL = { payroll: 'Payroll', single: 'Single Payment', b2b: 'B2B Payment', txn_payout: 'Transaction Payout' };
+const TYPE_LABEL = { payroll: 'Payroll', single: 'Single Payment', b2b: 'B2B Payment', txn_payout: 'Transaction Payout', batch_payout: 'Batch Payout' };
 
 const NAV_ITEMS = [
   { key: 'payroll',     icon: '💰', label: 'Payroll'             },
@@ -117,8 +117,10 @@ const Payouts = () => {
   const timerRef = useRef(null);
 
   // ── History ──────────────────────────────────────────────────
-  const [history, setHistory]   = useState([]);
-  const [expanded, setExpanded] = useState(null);
+  const [history, setHistory]       = useState([]);
+  const [expanded, setExpanded]     = useState(null);
+  const [historyPage, setHistoryPage]         = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(20);
 
   // ── Projects ─────────────────────────────────────────────────
   const [projects, setProjects]             = useState([]);
@@ -136,6 +138,21 @@ const Payouts = () => {
   const imprestRef                          = useRef(null);
   const [txnRequesting, setTxnRequesting]   = useState(false);
   const [txnSuccess, setTxnSuccess]         = useState('');
+
+  // ── Batch Payout ─────────────────────────────────────────────
+  const [txnMode, setTxnMode]                       = useState('single');
+  const [batchItems, setBatchItems]                 = useState([]);
+  const [batchForm, setBatchForm]                   = useState({ projectId: '', projectName: '', imprestId: '', imprestName: '', amount: '', description: '' });
+  const [batchPhone, setBatchPhone]                 = useState('');
+  const [batchRequesting, setBatchRequesting]       = useState(false);
+  const [batchItemError, setBatchItemError]         = useState('');
+  const [batchSubmitError, setBatchSubmitError]     = useState('');
+  const [batchProjectSearch, setBatchProjectSearch] = useState('');
+  const [batchProjectOpen, setBatchProjectOpen]     = useState(false);
+  const [batchImprestSearch, setBatchImprestSearch] = useState('');
+  const [batchImprestOpen, setBatchImprestOpen]     = useState(false);
+  const batchProjectRef                             = useRef(null);
+  const batchImprestRef                             = useRef(null);
 
   // ── PIN modal step 2 — record transaction ───────────────────
   const [modalStep, setModalStep]         = useState('pin'); // 'pin' | 'polling' | 'record' | 'failed'
@@ -264,6 +281,23 @@ const Payouts = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Close batch dropdowns on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (batchProjectRef.current && !batchProjectRef.current.contains(e.target)) setBatchProjectOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (batchImprestRef.current && !batchImprestRef.current.contains(e.target)) setBatchImprestOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   // Load projects when Transaction Payout view is opened
   useEffect(() => {
     if (view !== 'txn_payout') return;
@@ -314,6 +348,80 @@ const Payouts = () => {
 
     const resolveImprestAndProceed = async () => {
       const m = modalRef.current;
+
+      // ── Batch payout: auto-record each line item ──────────────
+      if (m?.type === 'batch_payout') {
+        setModalStep('batch_recording');
+        const items = m.payload.batchItems || [];
+        const newFailed = [];
+
+        for (const item of items) {
+          let imprestId = item.imprestId || null;
+          const imprestName = item.imprestName || 'Expenses';
+
+          if (!imprestId && item.projectId) {
+            try {
+              const { data } = await imprestService.findOrCreateExpenses({
+                project_id: item.projectId,
+                amount: item.amount,
+                createdBy: user.id,
+              });
+              imprestId = data.imprest.id;
+            } catch {
+              newFailed.push({
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                createdAt: new Date().toISOString(),
+                payoutLabel: m.label,
+                payoutAmount: item.amount,
+                imprestName,
+                imprestProject: item.projectName || null,
+                transactionData: { imprestAccount_id: null, item: item.description, itemQuantity: 1, unitPrice: item.amount, Total_amount: item.amount, userID: user.id, vat_charged: 0, url_image: null },
+              });
+              continue;
+            }
+          }
+
+          try {
+            await transactionService.create({
+              imprestAccount_id: imprestId,
+              item: item.description,
+              itemQuantity: 1,
+              unitPrice: item.amount,
+              Total_amount: item.amount,
+              userID: user.id,
+              vat_charged: 0,
+              url_image: null,
+            });
+          } catch {
+            newFailed.push({
+              id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              createdAt: new Date().toISOString(),
+              payoutLabel: m.label,
+              payoutAmount: item.amount,
+              imprestName,
+              imprestProject: item.projectName || null,
+              transactionData: { imprestAccount_id: imprestId, item: item.description, itemQuantity: 1, unitPrice: item.amount, Total_amount: item.amount, userID: user.id, vat_charged: 0, url_image: null },
+            });
+          }
+        }
+
+        if (newFailed.length > 0) setFailedTxns(prev => [...newFailed, ...prev]);
+        const succeeded = items.length - newFailed.length;
+        setModal(null);
+        setModalStep('pin');
+        setOcid(null);
+        setBatchItems([]);
+        setBatchPhone('');
+        fetchLedger();
+        const msg = succeeded === items.length
+          ? `Batch payout complete — ${succeeded} transaction${succeeded !== 1 ? 's' : ''} recorded.`
+          : `Batch payout complete — ${succeeded} of ${items.length} recorded. Check Action Required for the rest.`;
+        setTxnSuccess(msg);
+        setTimeout(() => setTxnSuccess(''), 8000);
+        return;
+      }
+
+      // ── Single txn_payout ─────────────────────────────────────
       let imprest = m?.payload?.imprest || null;
 
       if (!imprest && m?.payload?.projectId) {
@@ -400,8 +508,8 @@ const Payouts = () => {
     try {
       const authResponse = await payoutService.authorise(m.payoutId, pin);
 
-      // Transaction Payout: move to polling — wait for Safaricom B2C confirmation
-      if (m.type === 'txn_payout') {
+      // Transaction Payout / Batch Payout: move to polling — wait for Safaricom B2C confirmation
+      if (m.type === 'txn_payout' || m.type === 'batch_payout') {
         clearInterval(timerRef.current);
         setPin(''); setPinError('');
         setPollingError('');
@@ -801,6 +909,45 @@ const Payouts = () => {
 
   const txnPayoutReady = (txnPayout.projectId || txnPayout.imprestId) && txnPayout.contact.trim() && txnPayout.amount;
 
+  // ── Batch payout handlers ────────────────────────────────────
+  const addBatchItem = () => {
+    const { projectId, projectName, imprestId, imprestName, amount, description } = batchForm;
+    if (!projectId && !imprestId) { setBatchItemError('Select a project or imprest.'); return; }
+    if (!amount || parseFloat(amount) <= 0) { setBatchItemError('Enter a valid amount.'); return; }
+    if (!description.trim()) { setBatchItemError('Enter a description.'); return; }
+    setBatchItems(prev => [...prev, {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      projectId, projectName, imprestId, imprestName,
+      amount: parseFloat(amount),
+      description: description.trim(),
+    }]);
+    setBatchForm({ projectId: '', projectName: '', imprestId: '', imprestName: '', amount: '', description: '' });
+    setBatchProjectSearch('');
+    setBatchImprestSearch('');
+    setBatchItemError('');
+  };
+
+  const submitBatchPayout = async () => {
+    if (batchItems.length === 0) { setBatchSubmitError('Add at least one item.'); return; }
+    if (!batchPhone.trim()) { setBatchSubmitError('Enter a phone number.'); return; }
+    if (!isValidPhone(batchPhone)) { setBatchSubmitError('Enter a valid Kenyan mobile number.'); return; }
+    if (batchRequesting) return;
+    const total = batchItems.reduce((s, i) => s + i.amount, 0);
+    const label = `Batch payout to ${batchPhone} (${batchItems.length} items)`;
+    const payload = { phoneNumber: normalizePhone(batchPhone), amount: total, remarks: `Batch payout — ${batchItems.length} items` };
+    setBatchRequesting(true);
+    setBatchSubmitError('');
+    try {
+      const { data } = await payoutService.request({ type: 'single', payload, label, amount: total, initiatedBy: user.name });
+      setModalStep('pin');
+      openModal('batch_payout', label, total, { batchItems: [...batchItems], contact: batchPhone }, data.payoutId);
+    } catch {
+      setBatchSubmitError('Failed to initiate payout. Please try again.');
+    } finally {
+      setBatchRequesting(false);
+    }
+  };
+
   // ── Render ───────────────────────────────────────────────────
   return (
     <Layout>
@@ -919,88 +1066,138 @@ const Payouts = () => {
                     <span className="po-empty-icon">📭</span>
                     <p>No payout history yet. Initiate a payment using the menu on the right.</p>
                   </div>
-                ) : (
-                  <div className="po-table-wrap">
-                    <table className="po-table">
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Type</th>
-                          <th>Description</th>
-                          <th>Amount</th>
-                          <th>Transacted by</th>
-                          <th>Status</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {history.map(entry => (
-                          <React.Fragment key={entry.id}>
-                            <tr>
-                              <td className="td-mono">{fmtDate(entry.date)}</td>
-                              <td><span className={`po-type-badge ${entry.type}`}>{TYPE_LABEL[entry.type]}</span></td>
-                              <td className="td-desc">{entry.label}</td>
-                              <td className="td-amount">{entry.amount !== null ? fmtCur(entry.amount) : '—'}</td>
-                              <td className="td-initiated-by">{entry.initiatedBy || '—'}</td>
-                              <td>
-                                <span className="po-status-dot" style={{ background: STATUS_META[entry.status]?.dot }}></span>
-                                <span className={`po-status-txt ${STATUS_META[entry.status]?.cls}`}>
-                                  {STATUS_META[entry.status]?.label}
-                                </span>
-                              </td>
-                              <td>
-                                {entry.type === 'payroll' && (
-                                  <button
-                                    className="po-expand-btn"
-                                    onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}
-                                  >
-                                    {expanded === entry.id ? '▲' : '▼'}
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
+                ) : (() => {
+                  const totalPages  = Math.ceil(history.length / historyPageSize);
+                  const safePage    = Math.min(historyPage, totalPages);
+                  const start       = (safePage - 1) * historyPageSize;
+                  const pageEntries = history.slice(start, start + historyPageSize);
+                  return (
+                    <>
+                      <div className="po-ledger-toolbar">
+                        <span className="po-ledger-count">
+                          Showing {start + 1}–{Math.min(start + historyPageSize, history.length)} of {history.length}
+                        </span>
+                        <div className="po-ledger-page-size">
+                          <span>Rows per page:</span>
+                          {[20, 50, 100, 200].map(n => (
+                            <button
+                              key={n}
+                              className={`po-page-size-btn${historyPageSize === n ? ' active' : ''}`}
+                              onClick={() => { setHistoryPageSize(n); setHistoryPage(1); }}
+                            >{n}</button>
+                          ))}
+                        </div>
+                      </div>
 
-                            {entry.type === 'payroll' && expanded === entry.id && (
-                              <tr className="po-sub-row">
-                                <td colSpan={6}>
-                                  <div className="po-sub-wrap">
-                                    <table className="po-table po-sub-table">
-                                      <thead>
-                                        <tr>
-                                          <th>Staff No</th>
-                                          <th>Employee Name</th>
-                                          <th>Net Pay</th>
-                                          <th>Phone</th>
-                                          <th>Status</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {entry.payload.rows.map(row => (
-                                          <tr key={row._id}>
-                                            <td>{row.staffNo || '—'}</td>
-                                            <td>{row.name}</td>
-                                            <td>{fmtCur(row.netPay)}</td>
-                                            <td className="td-mono">{row.resolvedPhone}</td>
-                                            <td>
-                                              <span className="po-status-dot" style={{ background: STATUS_META[entry.status]?.dot }}></span>
-                                              <span className={`po-status-txt ${STATUS_META[entry.status]?.cls}`}>
-                                                {STATUS_META[entry.status]?.label}
-                                              </span>
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                      <div className="po-table-wrap">
+                        <table className="po-table">
+                          <thead>
+                            <tr>
+                              <th>Date</th>
+                              <th>Type</th>
+                              <th>Description</th>
+                              <th>Amount</th>
+                              <th>Transacted by</th>
+                              <th>Status</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pageEntries.map(entry => (
+                              <React.Fragment key={entry.id}>
+                                <tr>
+                                  <td className="td-mono">{fmtDate(entry.date)}</td>
+                                  <td><span className={`po-type-badge ${entry.type}`}>{TYPE_LABEL[entry.type]}</span></td>
+                                  <td className="td-desc">{entry.label}</td>
+                                  <td className="td-amount">{entry.amount !== null ? fmtCur(entry.amount) : '—'}</td>
+                                  <td className="td-initiated-by">{entry.initiatedBy || '—'}</td>
+                                  <td>
+                                    <span className="po-status-dot" style={{ background: STATUS_META[entry.status]?.dot }}></span>
+                                    <span className={`po-status-txt ${STATUS_META[entry.status]?.cls}`}>
+                                      {STATUS_META[entry.status]?.label}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    {entry.type === 'payroll' && (
+                                      <button
+                                        className="po-expand-btn"
+                                        onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}
+                                      >
+                                        {expanded === entry.id ? '▲' : '▼'}
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+
+                                {entry.type === 'payroll' && expanded === entry.id && (
+                                  <tr className="po-sub-row">
+                                    <td colSpan={6}>
+                                      <div className="po-sub-wrap">
+                                        <table className="po-table po-sub-table">
+                                          <thead>
+                                            <tr>
+                                              <th>Staff No</th>
+                                              <th>Employee Name</th>
+                                              <th>Net Pay</th>
+                                              <th>Phone</th>
+                                              <th>Status</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {entry.payload.rows.map(row => (
+                                              <tr key={row._id}>
+                                                <td>{row.staffNo || '—'}</td>
+                                                <td>{row.name}</td>
+                                                <td>{fmtCur(row.netPay)}</td>
+                                                <td className="td-mono">{row.resolvedPhone}</td>
+                                                <td>
+                                                  <span className="po-status-dot" style={{ background: STATUS_META[entry.status]?.dot }}></span>
+                                                  <span className={`po-status-txt ${STATUS_META[entry.status]?.cls}`}>
+                                                    {STATUS_META[entry.status]?.label}
+                                                  </span>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {totalPages > 1 && (
+                        <div className="po-pagination">
+                          <button
+                            className="po-page-btn"
+                            onClick={() => setHistoryPage(1)}
+                            disabled={safePage === 1}
+                          >«</button>
+                          <button
+                            className="po-page-btn"
+                            onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                            disabled={safePage === 1}
+                          >‹ Prev</button>
+                          <span className="po-page-indicator">Page {safePage} of {totalPages}</span>
+                          <button
+                            className="po-page-btn"
+                            onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                            disabled={safePage === totalPages}
+                          >Next ›</button>
+                          <button
+                            className="po-page-btn"
+                            onClick={() => setHistoryPage(totalPages)}
+                            disabled={safePage === totalPages}
+                          >»</button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
 
@@ -1234,10 +1431,16 @@ const Payouts = () => {
                 <div className="po-panel-header">
                   <div>
                     <h2>Transaction Payout</h2>
-                    <p>Send a payment and record it against a project. Director PIN required.</p>
+                    <p>Send a payment and record it against a project or imprest. Director PIN required.</p>
                   </div>
                 </div>
-                <div className="po-form narrow">
+
+                <div className="po-mode-toggle">
+                  <button className={`po-mode-btn${txnMode === 'single' ? ' active' : ''}`} onClick={() => setTxnMode('single')}>Single</button>
+                  <button className={`po-mode-btn${txnMode === 'batch' ? ' active' : ''}`} onClick={() => setTxnMode('batch')}>Batch</button>
+                </div>
+
+                {txnMode === 'single' && <div className="po-form narrow">
                   <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
 
                   {/* Step 1 — Select Project */}
@@ -1400,7 +1603,215 @@ const Payouts = () => {
                       <span className="po-hint">Select a project or imprest to continue</span>
                     )}
                   </div>
-                </div>
+                </div>}
+
+                {/* ── Batch mode ──────────────────────────────── */}
+                {txnMode === 'batch' && (
+                  <div className="po-batch-layout">
+
+                    {/* Left: add-item form */}
+                    <div className="po-batch-form-col">
+                      <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
+
+                      <div className="po-txp-section-label">Project <span className="po-txp-required">*</span></div>
+                      <div className="po-field" ref={batchProjectRef} style={{ position: 'relative' }}>
+                        {projectsLoading ? (
+                          <div className="po-txp-loading">Loading projects…</div>
+                        ) : (
+                          <>
+                            <input
+                              type="text"
+                              className="po-txp-search"
+                              placeholder="Search project…"
+                              value={batchProjectSearch}
+                              onFocus={() => setBatchProjectOpen(true)}
+                              onChange={e => {
+                                setBatchProjectSearch(e.target.value);
+                                setBatchProjectOpen(true);
+                                setBatchForm(p => ({ ...p, projectId: '', projectName: '' }));
+                              }}
+                            />
+                            {batchProjectOpen && (
+                              <div className="po-txp-dropdown">
+                                {projects
+                                  .filter(proj => proj.name.toLowerCase().includes(batchProjectSearch.toLowerCase()))
+                                  .map(proj => (
+                                    <div
+                                      key={proj.id}
+                                      className={`po-txp-option${batchForm.projectId === proj.id ? ' selected' : ''}`}
+                                      onMouseDown={() => {
+                                        setBatchForm(p => ({ ...p, projectId: proj.id, projectName: proj.name }));
+                                        setBatchProjectSearch(proj.name);
+                                        setBatchProjectOpen(false);
+                                      }}
+                                    >
+                                      <div className="po-txp-opt-name">{proj.name}</div>
+                                      <div className="po-txp-opt-bal">{proj.status}</div>
+                                    </div>
+                                  ))
+                                }
+                                {projects.filter(p => p.name.toLowerCase().includes(batchProjectSearch.toLowerCase())).length === 0 && (
+                                  <div className="po-txp-no-results">No projects match</div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      <div className="po-txp-section-label">Imprest <span className="po-txp-optional">(optional)</span></div>
+                      <div className="po-field" ref={batchImprestRef} style={{ position: 'relative' }}>
+                        {imprestsLoading ? (
+                          <div className="po-txp-loading">Loading imprests…</div>
+                        ) : (
+                          <>
+                            <input
+                              type="text"
+                              className="po-txp-search"
+                              placeholder="Search imprest…"
+                              value={batchImprestSearch}
+                              onFocus={() => setBatchImprestOpen(true)}
+                              onChange={e => {
+                                setBatchImprestSearch(e.target.value);
+                                setBatchImprestOpen(true);
+                                setBatchForm(p => ({ ...p, imprestId: '', imprestName: '' }));
+                              }}
+                            />
+                            {batchImprestOpen && (
+                              <div className="po-txp-dropdown">
+                                {imprests
+                                  .filter(imp => {
+                                    const q = batchImprestSearch.toLowerCase();
+                                    return imp.name.toLowerCase().includes(q) || (imp.projectName || '').toLowerCase().includes(q);
+                                  })
+                                  .map(imp => (
+                                    <div
+                                      key={imp.id}
+                                      className={`po-txp-option${batchForm.imprestId === imp.id ? ' selected' : ''}`}
+                                      onMouseDown={() => {
+                                        setBatchForm(p => ({ ...p, imprestId: imp.id, imprestName: imp.name }));
+                                        setBatchImprestSearch(`${imp.name}${imp.projectName ? ` · ${imp.projectName}` : ''}`);
+                                        setBatchImprestOpen(false);
+                                      }}
+                                    >
+                                      <div className="po-txp-opt-name">{imp.name}{imp.projectName ? <span className="po-txp-opt-proj"> · {imp.projectName}</span> : ''}</div>
+                                      <div className="po-txp-opt-bal">{fmtCur(imp.remaining)}</div>
+                                    </div>
+                                  ))
+                                }
+                                {imprests.filter(imp => {
+                                  const q = batchImprestSearch.toLowerCase();
+                                  return imp.name.toLowerCase().includes(q) || (imp.projectName || '').toLowerCase().includes(q);
+                                }).length === 0 && (
+                                  <div className="po-txp-no-results">No imprests match</div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      <div className="po-field">
+                        <label>Amount (KES)</label>
+                        <input
+                          type="number" min="0" step="0.01" placeholder="0.00"
+                          value={batchForm.amount}
+                          onChange={e => setBatchForm(p => ({ ...p, amount: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="po-field">
+                        <label>Description</label>
+                        <textarea
+                          rows={3} placeholder="e.g. Labour costs — Block 3"
+                          value={batchForm.description}
+                          onChange={e => setBatchForm(p => ({ ...p, description: e.target.value }))}
+                        />
+                      </div>
+
+                      {batchItemError && <p className="po-field-error">{batchItemError}</p>}
+
+                      <button className="po-batch-add-btn" onClick={addBatchItem}>
+                        + Add Item
+                      </button>
+                    </div>
+
+                    {/* Right: items table + initiate */}
+                    <div className="po-batch-table-col">
+                      {batchItems.length === 0 ? (
+                        <div className="po-batch-empty">
+                          <span>Items you add will appear here</span>
+                        </div>
+                      ) : (
+                        <div className="po-table-wrap">
+                          <table className="po-batch-table">
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                <th>Project</th>
+                                <th>Imprest</th>
+                                <th>Description</th>
+                                <th>Amount</th>
+                                <th></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {batchItems.map((item, idx) => (
+                                <tr key={item.id}>
+                                  <td className="td-mono">{idx + 1}</td>
+                                  <td>{item.projectName || '—'}</td>
+                                  <td>{item.imprestName || <span className="po-batch-expenses">Expenses</span>}</td>
+                                  <td className="td-desc">{item.description}</td>
+                                  <td className="td-amount">{fmtCur(item.amount)}</td>
+                                  <td>
+                                    <button
+                                      className="po-batch-remove-btn"
+                                      onClick={() => setBatchItems(prev => prev.filter(i => i.id !== item.id))}
+                                      title="Remove"
+                                    >✕</button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="po-batch-total-row">
+                                <td colSpan={4}><strong>Total</strong></td>
+                                <td className="td-amount"><strong>{fmtCur(batchItems.reduce((s, i) => s + i.amount, 0))}</strong></td>
+                                <td></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      )}
+
+                      <div className="po-batch-phone-section">
+                        <div className="po-field">
+                          <label>Recipient Phone Number</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 0712345678"
+                            value={batchPhone}
+                            onChange={e => { setBatchPhone(e.target.value); setBatchSubmitError(''); }}
+                          />
+                        </div>
+                        {batchItems.length > 0 && batchPhone && (
+                          <div className="po-preview">
+                            Sending <strong>{fmtCur(batchItems.reduce((s, i) => s + i.amount, 0))}</strong> to <strong>{batchPhone}</strong> — {batchItems.length} item{batchItems.length !== 1 ? 's' : ''} will be recorded
+                          </div>
+                        )}
+                        {batchSubmitError && <p className="po-field-error">{batchSubmitError}</p>}
+                        <button
+                          className="po-initiate-btn"
+                          style={{ width: '100%' }}
+                          onClick={submitBatchPayout}
+                          disabled={batchRequesting || batchItems.length === 0}
+                        >
+                          {batchRequesting ? 'Sending SMS…' : `Initiate Batch Payout${batchItems.length > 0 ? ` · ${fmtCur(batchItems.reduce((s, i) => s + i.amount, 0))}` : ''}`}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -1560,17 +1971,31 @@ const Payouts = () => {
           <div className={`pin-modal${modalStep === 'record' ? ' wide' : ''}`}>
             <div className="pin-modal-head">
               <div className="pin-lock-icon">
-                {modalStep === 'record' ? '🧾' : modalStep === 'polling' ? '⏳' : modalStep === 'failed' ? '❌' : pinExpired ? '⏰' : '🔐'}
+                {modalStep === 'record' ? '🧾' : (modalStep === 'polling' || modalStep === 'batch_recording') ? '⏳' : modalStep === 'failed' ? '❌' : pinExpired ? '⏰' : '🔐'}
               </div>
               <h2>
                 {modalStep === 'record' ? 'Record Transaction'
                   : modalStep === 'polling' ? 'Processing Payment'
+                  : modalStep === 'batch_recording' ? 'Recording Transactions'
                   : modalStep === 'failed' ? 'Payment Failed'
                   : pinExpired ? 'Approval Window Closed'
                   : 'Director Approval Required'}
               </h2>
             </div>
             <div className="pin-modal-body">
+
+              {/* ── Batch recording: auto-recording all line items ── */}
+              {modalStep === 'batch_recording' && (
+                <>
+                  <p className="pin-desc">
+                    Payment confirmed. Recording {modal?.payload?.batchItems?.length} transaction{modal?.payload?.batchItems?.length !== 1 ? 's' : ''}…
+                  </p>
+                  <div className="po-polling-spinner">
+                    <div className="po-spinner"></div>
+                    <span>Please wait</span>
+                  </div>
+                </>
+              )}
 
               {/* ── Polling: waiting for Safaricom confirmation ── */}
               {modalStep === 'polling' && (
