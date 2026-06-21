@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import './Projects.css';
 
 const Projects = () => {
-  const { canViewAllImprests } = useAuth();
+  const { user, canViewAllImprests, canViewProjectComments } = useAuth();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectDetail, setProjectDetail] = useState(null);
@@ -24,6 +24,13 @@ const Projects = () => {
   const [movePopoverImprestId, setMovePopoverImprestId] = useState(null);
   const [moveModalImprest, setMoveModalImprest] = useState(null);
   const [movingImprestId, setMovingImprestId] = useState(null);
+
+  // Comments state
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [savingComment, setSavingComment] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -106,6 +113,7 @@ const Projects = () => {
     setImprestTransactions({});
     setSelectedTransaction(null);
     setTransactionImageUrl(null);
+    setComments([]);
 
     try {
       setLoadingDetail(true);
@@ -116,6 +124,8 @@ const Projects = () => {
     } finally {
       setLoadingDetail(false);
     }
+
+    if (commentsOpen) fetchComments(project.id);
   };
 
   const handleImprestClick = async (imprestId) => {
@@ -201,6 +211,52 @@ const Projects = () => {
     }
   };
 
+  const fetchComments = async (projectId) => {
+    setLoadingComments(true);
+    try {
+      const res = await projectService.getComments(projectId);
+      setComments(res.data.comments || []);
+    } catch (err) {
+      console.error('Failed to load comments:', err);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  const handleToggleComments = () => {
+    if (!commentsOpen && selectedProject) {
+      fetchComments(selectedProject.id);
+    }
+    setCommentsOpen(prev => !prev);
+    setNewComment('');
+  };
+
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+    setSavingComment(true);
+    try {
+      const res = await projectService.addComment(selectedProject.id, {
+        comment: newComment.trim(),
+        createdBy: user.id,
+      });
+      setComments(prev => [...prev, res.data.comment]);
+      setNewComment('');
+    } catch (err) {
+      console.error('Failed to add comment:', err);
+    } finally {
+      setSavingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    try {
+      await projectService.deleteComment(selectedProject.id, commentId);
+      setComments(prev => prev.filter(c => c.id !== commentId));
+    } catch (err) {
+      console.error('Failed to delete comment:', err);
+    }
+  };
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
@@ -213,6 +269,16 @@ const Projects = () => {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
+    });
+  };
+
+  const formatDateTime = (dateString) => {
+    return new Date(dateString).toLocaleString('en-KE', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -262,7 +328,7 @@ const Projects = () => {
 
         {error && <div className="error-banner">{error}</div>}
 
-        <div className="projects-layout">
+        <div className={`projects-layout${commentsOpen && canViewProjectComments() ? ' comments-open' : ''}`}>
           {/* Projects List */}
           <div className="projects-list-panel">
             <div className="projects-list-header">
@@ -372,6 +438,21 @@ const Projects = () => {
                     <span className="amount">{formatCurrency(projectDetail.balance)}</span>
                   </div>
                 </div>
+
+                {canViewProjectComments() && (
+                  <div className="comment-bubble-row">
+                    <button
+                      className={`comment-bubble${commentsOpen ? ' active' : ''}`}
+                      onClick={handleToggleComments}
+                    >
+                      <span>💬</span>
+                      <span>Comments</span>
+                      {comments.length > 0 && (
+                        <span className="comment-count-badge">{comments.length}</span>
+                      )}
+                    </button>
+                  </div>
+                )}
 
                 <div className="imprests-section">
                   <h3>Imprest Accounts ({(projectDetail.imprests || []).length})</h3>
@@ -608,6 +689,57 @@ const Projects = () => {
               </>
             )}
           </div>
+
+          {/* Comments panel */}
+          {commentsOpen && canViewProjectComments() && selectedProject && (
+            <div className="project-comments-panel">
+              <div className="comments-panel-header">
+                <h3>Comments</h3>
+                <button className="close-preview-btn" onClick={() => setCommentsOpen(false)}>×</button>
+              </div>
+              <div className="comments-list">
+                {loadingComments ? (
+                  <div className="loading-container small"><div className="spinner"></div></div>
+                ) : comments.length === 0 ? (
+                  <p className="comments-empty">No comments yet.</p>
+                ) : (
+                  comments.map(c => (
+                    <div key={c.id} className="comment-item">
+                      <div className="comment-meta">
+                        <span className="comment-author">{c.user?.name || 'Unknown'}</span>
+                        <span className="comment-date">{formatDateTime(c.createdAt)}</span>
+                        <button
+                          className="comment-delete-btn"
+                          onClick={() => handleDeleteComment(c.id)}
+                          title="Delete"
+                        >×</button>
+                      </div>
+                      <p className="comment-text">{c.comment}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="comment-input-area">
+                <textarea
+                  className="comment-textarea"
+                  value={newComment}
+                  onChange={e => setNewComment(e.target.value)}
+                  placeholder="Write a comment... (Ctrl+Enter to post)"
+                  rows={3}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAddComment();
+                  }}
+                />
+                <button
+                  className="comment-post-btn"
+                  onClick={handleAddComment}
+                  disabled={savingComment || !newComment.trim()}
+                >
+                  {savingComment ? 'Posting...' : 'Post'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

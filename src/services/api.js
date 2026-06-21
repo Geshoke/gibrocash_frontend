@@ -51,6 +51,7 @@ export const userService = {
   toggleEditTransactions: (id, edit_transactions) => api.patch(`/users/${id}/edit-transactions`, { edit_transactions }),
   toggleCreateInvoices: (id, create_invoices) => api.patch(`/users/${id}/create-invoices`, { create_invoices }),
   toggleMoveTransactions: (id, move_transactions) => api.patch(`/users/${id}/move-transactions`, { move_transactions }),
+  toggleProjectComments: (id, project_comments) => api.patch(`/users/${id}/project-comments`, { project_comments }),
 };
 
 // Imprest endpoints
@@ -112,6 +113,9 @@ export const projectService = {
   getById: (id) => api.get(`/projects/${id}`),
   assignImprest: (imprestId, projectId) =>
     api.patch(`/imprest/${imprestId}/assign-project`, { project_id: projectId }),
+  getComments: (id) => api.get(`/projects/${id}/comments`),
+  addComment: (id, data) => api.post(`/projects/${id}/comments`, data),
+  deleteComment: (id, commentId) => api.delete(`/projects/${id}/comments/${commentId}`),
 };
 
 // Image endpoints

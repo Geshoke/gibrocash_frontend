@@ -45,6 +45,7 @@ export const AuthProvider = ({ children }) => {
       edit_transactions: profile?.edit_transactions ?? false,
       create_invoices: profile?.create_invoices ?? false,
       move_transactions: profile?.move_transactions ?? false,
+      project_comments: profile?.project_comments ?? false,
     };
 
     localStorage.setItem('user', JSON.stringify(userObj));
@@ -87,6 +88,10 @@ export const AuthProvider = ({ children }) => {
     return user?.move_transactions === true;
   };
 
+  const canViewProjectComments = () => {
+    return user?.project_comments === true;
+  };
+
   const value = {
     user,
     login,
@@ -98,6 +103,7 @@ export const AuthProvider = ({ children }) => {
     canEditTransactions,
     canCreateInvoices,
     canMoveTransactions,
+    canViewProjectComments,
     isAuthenticated: !!user,
     loading,
   };
