@@ -6,7 +6,7 @@ import { payoutService, imprestService, transactionService, imageService, projec
 import './Payouts.css';
 
 // ── Constants ──────────────────────────────────────────────────
-const PIN_TIMEOUT_SECS = 600;
+const PIN_TIMEOUT_SECS = 60;
 
 // ── Helpers ────────────────────────────────────────────────────
 const fmtCur = (n) =>
@@ -207,7 +207,7 @@ const Payouts = () => {
       const b2cPayments = b2cResult.status === 'fulfilled'
         ? (b2cResult.value.data.payments || []).map(p => ({
             id:          `b2c-${p.id}`,
-            type:        'single',
+            type:        p.occasion || 'single',
             label:       p.remarks || '—',
             amount:      parseFloat(p.amount),
             date:        p.initiatedAt,
@@ -728,7 +728,7 @@ const Payouts = () => {
     const payload = { phoneNumber: normalizePhone(contact), amount: amt, remarks: description || 'Transaction Payout' };
     setTxnRequesting(true);
     try {
-      const { data } = await payoutService.request({ type: 'single', payload, label, amount: amt, initiatedBy: user.name });
+      const { data } = await payoutService.request({ type: 'txn_payout', payload, label, amount: amt, initiatedBy: user.name });
       setModalStep('pin');
       openModal('txn_payout', label, amt, {
         ...txnPayout,
