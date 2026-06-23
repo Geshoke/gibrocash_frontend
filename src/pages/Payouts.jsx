@@ -6,7 +6,7 @@ import { payoutService, imprestService, transactionService, imageService, projec
 import './Payouts.css';
 
 // ── Constants ──────────────────────────────────────────────────
-const PIN_TIMEOUT_SECS = 60;
+const PIN_TIMEOUT_SECS = 180;
 
 // ── Helpers ────────────────────────────────────────────────────
 const fmtCur = (n) =>
