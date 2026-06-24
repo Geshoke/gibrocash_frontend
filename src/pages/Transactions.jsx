@@ -283,7 +283,10 @@ const Transactions = () => {
           imprestService.getAllNames().then(r => setAllImprests(r.data?.response || []))
         );
         if (allProjects.length === 0) fetches.push(
-          projectService.getAll().then(r => setAllProjects(r.data?.response || []))
+          projectService.getAll().then(r => {
+            const data = r.data?.projects;
+            setAllProjects(Array.isArray(data) ? data : []);
+          })
         );
         if (fetches.length > 0) await Promise.all(fetches);
       } catch {
