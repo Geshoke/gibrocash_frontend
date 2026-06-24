@@ -37,6 +37,12 @@ const Transactions = () => {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError]   = useState('');
 
+  // ── Split transaction ─────────────────────────────────────────
+  const [splitMode, setSplitMode]   = useState(false);
+  const [splitParts, setSplitParts] = useState([]);
+  const [splitSaving, setSplitSaving] = useState(false);
+  const [splitError, setSplitError]   = useState('');
+
   // ── Move to imprest ───────────────────────────────────────────
   const [allImprests, setAllImprests]     = useState([]);
   const [moveImprestId, setMoveImprestId] = useState('');
@@ -271,6 +277,67 @@ const Transactions = () => {
     setMoveSuccess('');
   };
 
+  // ── Split handlers ────────────────────────────────────────────
+
+  const openSplit = () => {
+    const total = selectedTransaction.price || 0;
+    const half  = parseFloat((total / 2).toFixed(2));
+    const other = parseFloat((total - half).toFixed(2));
+    setSplitParts([
+      { item: selectedTransaction.item, amount: String(half) },
+      { item: selectedTransaction.item, amount: String(other) },
+    ]);
+    setSplitError('');
+    setSplitMode(true);
+  };
+
+  const updateSplitPart = (i, field, value) => {
+    setSplitParts(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
+  };
+
+  const addSplitPart = () => {
+    setSplitParts(prev => [...prev, { item: selectedTransaction.item, amount: '' }]);
+  };
+
+  const removeSplitPart = (i) => {
+    setSplitParts(prev => prev.filter((_, idx) => idx !== i));
+  };
+
+  const confirmSplit = async () => {
+    for (const p of splitParts) {
+      if (!p.item.trim()) { setSplitError('Every part needs an item description.'); return; }
+      if (!p.amount || parseFloat(p.amount) <= 0) { setSplitError('Every part needs a positive amount.'); return; }
+    }
+    const total     = selectedTransaction.price;
+    const allocated = splitParts.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    if (Math.abs(total - allocated) > 0.005) {
+      setSplitError(`Amounts must sum to ${formatCurrency(total)}.`);
+      return;
+    }
+    setSplitSaving(true);
+    setSplitError('');
+    try {
+      const parts = splitParts.map(p => ({
+        item:  p.item.trim(),
+        price: parseFloat(parseFloat(p.amount).toFixed(2)),
+      }));
+      const res     = await transactionService.split(selectedTransaction.id, parts);
+      const newTxns = res.data?.transactions || [];
+      setTransactions(prev => {
+        const without = prev.filter(t => t.id !== selectedTransaction.id);
+        return [...newTxns, ...without];
+      });
+      setTotalCount(prev => prev - 1 + newTxns.length);
+      setSplitMode(false);
+      setSelectedTransaction(null);
+      setTransactionImageUrl(null);
+    } catch {
+      setSplitError('Failed to split transaction. Please try again.');
+    } finally {
+      setSplitSaving(false);
+    }
+  };
+
   const moveTransaction = async () => {
     if (!moveImprestId) { setMoveError('Please select a destination imprest.'); return; }
     if (moveImprestId === selectedTransaction.imprest_id) { setMoveError('Transaction is already in this imprest.'); return; }
@@ -331,6 +398,10 @@ const Transactions = () => {
 
   const formatTime = (dateString) =>
     new Date(dateString).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
+
+  const splitAllocated  = splitParts.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  const splitRemainder  = parseFloat(((selectedTransaction?.price || 0) - splitAllocated).toFixed(2));
+  const splitBalanced   = Math.abs(splitRemainder) < 0.005;
 
   const unassignedCategories = categories.filter(
     c => !(selectedTransaction?.categories || []).some(tc => tc.id === c.id)
@@ -499,7 +570,10 @@ const Transactions = () => {
                   </div>
                   <div className="txn-detail-header-actions">
                     {canEditTransactions() && !editMode && (
-                      <button className="txn-edit-btn" onClick={openEdit}>Edit</button>
+                      <>
+                        <button className="txn-split-btn" onClick={openSplit}>Split</button>
+                        <button className="txn-edit-btn" onClick={openEdit}>Edit</button>
+                      </>
                     )}
                     <button
                       className="close-preview-btn"
@@ -716,6 +790,77 @@ const Transactions = () => {
           </div>
         </div>
       </div>
+
+      {/* Split modal */}
+      {splitMode && selectedTransaction && (
+        <div className="split-modal-overlay" onClick={() => !splitSaving && setSplitMode(false)}>
+          <div className="split-modal" onClick={e => e.stopPropagation()}>
+            <div className="split-modal-header">
+              <div>
+                <h3>Split Transaction</h3>
+                <p className="split-modal-subtitle">
+                  {selectedTransaction.item} &middot; {formatCurrency(selectedTransaction.price)}
+                </p>
+              </div>
+              <button className="close-preview-btn" onClick={() => setSplitMode(false)}>&times;</button>
+            </div>
+
+            <div className="split-parts-list">
+              {splitParts.map((part, i) => (
+                <div key={i} className="split-part-row">
+                  <div className="split-part-header">
+                    <span className="split-part-label">Part {i + 1}</span>
+                    {splitParts.length > 2 && (
+                      <button className="split-remove-btn" onClick={() => removeSplitPart(i)}>&times;</button>
+                    )}
+                  </div>
+                  <div className="split-part-fields">
+                    <input
+                      className="txn-edit-input"
+                      type="text"
+                      placeholder="Item description"
+                      value={part.item}
+                      onChange={e => updateSplitPart(i, 'item', e.target.value)}
+                    />
+                    <input
+                      className="txn-edit-input split-amount-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Amount (KES)"
+                      value={part.amount}
+                      onChange={e => updateSplitPart(i, 'amount', e.target.value)}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button className="split-add-btn" onClick={addSplitPart}>+ Add Part</button>
+
+            <div className={`split-remainder${splitBalanced ? ' balanced' : ''}`}>
+              {splitBalanced
+                ? 'Balanced ✓'
+                : `Remaining: ${formatCurrency(splitRemainder)}`}
+            </div>
+
+            {splitError && <p className="txn-edit-error">{splitError}</p>}
+
+            <div className="txn-edit-actions">
+              <button className="txn-edit-cancel-btn" onClick={() => setSplitMode(false)} disabled={splitSaving}>
+                Cancel
+              </button>
+              <button
+                className="txn-edit-save-btn"
+                onClick={confirmSplit}
+                disabled={splitSaving || !splitBalanced}
+              >
+                {splitSaving ? 'Splitting…' : 'Confirm Split'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };
