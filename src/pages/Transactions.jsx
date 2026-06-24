@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { transactionService, imageService, categoryService, imprestService } from '../services/api';
+import { transactionService, imageService, categoryService, imprestService, projectService } from '../services/api';
 import Layout from '../components/Layout';
 import './Transactions.css';
 
@@ -44,13 +44,18 @@ const Transactions = () => {
   const [splitError, setSplitError]   = useState('');
 
   // ── Move to imprest ───────────────────────────────────────────
-  const [allImprests, setAllImprests]     = useState([]);
-  const [moveImprestId, setMoveImprestId] = useState('');
-  const [moveSearch, setMoveSearch]       = useState('');
+  const [allImprests, setAllImprests]           = useState([]);
+  const [allProjects, setAllProjects]           = useState([]);
+  const [moveProjectId, setMoveProjectId]       = useState('');
+  const [moveProjectSearch, setMoveProjectSearch] = useState('');
+  const [moveProjectDropdownOpen, setMoveProjectDropdownOpen] = useState(false);
+  const moveProjectComboRef = useRef(null);
+  const [moveImprestId, setMoveImprestId]       = useState('');
+  const [moveSearch, setMoveSearch]             = useState('');
   const [moveDropdownOpen, setMoveDropdownOpen] = useState(false);
-  const [moveSaving, setMoveSaving]       = useState(false);
-  const [moveError, setMoveError]         = useState('');
-  const [moveSuccess, setMoveSuccess]     = useState('');
+  const [moveSaving, setMoveSaving]             = useState(false);
+  const [moveError, setMoveError]               = useState('');
+  const [moveSuccess, setMoveSuccess]           = useState('');
   const moveComboRef = useRef(null);
 
   // ── Filters ───────────────────────────────────────────────────
@@ -81,6 +86,17 @@ const Transactions = () => {
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);
   }, [categoryPopoverOpen]);
+
+  useEffect(() => {
+    if (!moveProjectDropdownOpen) return;
+    const close = (e) => {
+      if (moveProjectComboRef.current && !moveProjectComboRef.current.contains(e.target)) {
+        setMoveProjectDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [moveProjectDropdownOpen]);
 
   useEffect(() => {
     if (!moveDropdownOpen) return;
@@ -256,11 +272,20 @@ const Transactions = () => {
     setMoveDropdownOpen(false);
     setMoveError('');
     setMoveSuccess('');
+    setMoveProjectId('');
+    setMoveProjectSearch('');
+    setMoveProjectDropdownOpen(false);
     setEditMode(true);
-    if (canMoveTransactions() && allImprests.length === 0) {
+    if (canMoveTransactions()) {
       try {
-        const res = await imprestService.getAllNames();
-        setAllImprests(res.data?.response || []);
+        const fetches = [];
+        if (allImprests.length === 0) fetches.push(
+          imprestService.getAllNames().then(r => setAllImprests(r.data?.response || []))
+        );
+        if (allProjects.length === 0) fetches.push(
+          projectService.getAll().then(r => setAllProjects(r.data?.response || []))
+        );
+        if (fetches.length > 0) await Promise.all(fetches);
       } catch {
         // non-fatal — move section just won't have options
       }
@@ -270,6 +295,9 @@ const Transactions = () => {
   const cancelEdit = () => {
     setEditMode(false);
     setEditError('');
+    setMoveProjectId('');
+    setMoveProjectSearch('');
+    setMoveProjectDropdownOpen(false);
     setMoveImprestId('');
     setMoveSearch('');
     setMoveDropdownOpen(false);
@@ -402,6 +430,10 @@ const Transactions = () => {
   const splitAllocated  = splitParts.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
   const splitRemainder  = parseFloat(((selectedTransaction?.price || 0) - splitAllocated).toFixed(2));
   const splitBalanced   = Math.abs(splitRemainder) < 0.005;
+
+  const filteredImprests = moveProjectId
+    ? allImprests.filter(i => i.project_id === moveProjectId)
+    : allImprests;
 
   const unassignedCategories = categories.filter(
     c => !(selectedTransaction?.categories || []).some(tc => tc.id === c.id)
@@ -623,6 +655,69 @@ const Transactions = () => {
                       {canMoveTransactions() && (
                         <div className="txn-move-section">
                           <span className="txn-detail-label">Move to Imprest</span>
+
+                          {/* Step 1 — project filter */}
+                          <div className="txn-move-combo" ref={moveProjectComboRef}>
+                            <input
+                              className="txn-edit-input txn-move-search"
+                              type="text"
+                              placeholder="Filter by project (optional)…"
+                              value={moveProjectSearch}
+                              onFocus={() => setMoveProjectDropdownOpen(true)}
+                              onChange={e => {
+                                setMoveProjectSearch(e.target.value);
+                                setMoveProjectId('');
+                                setMoveProjectDropdownOpen(true);
+                                setMoveImprestId('');
+                                setMoveSearch('');
+                                setMoveError('');
+                                setMoveSuccess('');
+                              }}
+                            />
+                            {moveProjectDropdownOpen && (
+                              <div className="txn-move-dropdown">
+                                <button
+                                  className={`txn-move-dropdown-item${!moveProjectId ? ' selected' : ''}`}
+                                  onMouseDown={e => {
+                                    e.preventDefault();
+                                    setMoveProjectId('');
+                                    setMoveProjectSearch('');
+                                    setMoveProjectDropdownOpen(false);
+                                    setMoveImprestId('');
+                                    setMoveSearch('');
+                                  }}
+                                >
+                                  All projects
+                                </button>
+                                {allProjects
+                                  .filter(p => p.name.toLowerCase().includes(moveProjectSearch.toLowerCase()))
+                                  .map(p => (
+                                    <button
+                                      key={p.id}
+                                      className={`txn-move-dropdown-item${moveProjectId === p.id ? ' selected' : ''}`}
+                                      onMouseDown={e => {
+                                        e.preventDefault();
+                                        setMoveProjectId(p.id);
+                                        setMoveProjectSearch(p.name);
+                                        setMoveProjectDropdownOpen(false);
+                                        setMoveImprestId('');
+                                        setMoveSearch('');
+                                        setMoveError('');
+                                        setMoveSuccess('');
+                                      }}
+                                    >
+                                      {p.name}
+                                    </button>
+                                  ))
+                                }
+                                {allProjects.filter(p => p.name.toLowerCase().includes(moveProjectSearch.toLowerCase())).length === 0 && (
+                                  <span className="txn-move-dropdown-empty">No projects match</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Step 2 — imprest (filtered by selected project) */}
                           <div className="txn-move-row">
                             <div className="txn-move-combo" ref={moveComboRef}>
                               <input
@@ -641,12 +736,12 @@ const Transactions = () => {
                               />
                               {moveDropdownOpen && (
                                 <div className="txn-move-dropdown">
-                                  {allImprests.filter(i =>
+                                  {filteredImprests.filter(i =>
                                     i.name.toLowerCase().includes(moveSearch.toLowerCase())
                                   ).length === 0 ? (
                                     <span className="txn-move-dropdown-empty">No imprests match</span>
                                   ) : (
-                                    allImprests
+                                    filteredImprests
                                       .filter(i => i.name.toLowerCase().includes(moveSearch.toLowerCase()))
                                       .map(i => (
                                         <button
@@ -661,7 +756,10 @@ const Transactions = () => {
                                             setMoveSuccess('');
                                           }}
                                         >
-                                          {i.name}
+                                          <span>{i.name}</span>
+                                          {i.project?.name && (
+                                            <span className="txn-move-imprest-project">{i.project.name}</span>
+                                          )}
                                         </button>
                                       ))
                                   )}
@@ -672,6 +770,7 @@ const Transactions = () => {
                               {moveSaving ? 'Moving…' : 'Move'}
                             </button>
                           </div>
+
                           {moveError   && <p className="txn-edit-error">{moveError}</p>}
                           {moveSuccess && <p className="txn-move-success">{moveSuccess}</p>}
                         </div>

@@ -953,3 +953,19 @@
   background: #f0fff4;
   border-color: #9ae6b4;
 }
+
+/* ── Move section — two-step project + imprest ───────────────── */
+.txn-move-dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.txn-move-imprest-project {
+  font-size: 0.72rem;
+  color: #a0aec0;
+  flex-shrink: 0;
+}
+.txn-move-section .txn-move-combo {
+  margin-bottom: 8px;
+}
