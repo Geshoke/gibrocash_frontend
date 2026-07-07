@@ -253,9 +253,16 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #38a169;
   flex-shrink: 0;
   margin-left: 6px;
+}
+
+.txn-list-receipt-dot.has-receipt {
+  background: #38a169;
+}
+
+.txn-list-receipt-dot.no-receipt {
+  background: #e53e3e;
 }
 
 .txn-list-footer {

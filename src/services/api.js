@@ -52,6 +52,7 @@ export const userService = {
   toggleCreateInvoices: (id, create_invoices) => api.patch(`/users/${id}/create-invoices`, { create_invoices }),
   toggleMoveTransactions: (id, move_transactions) => api.patch(`/users/${id}/move-transactions`, { move_transactions }),
   toggleProjectComments: (id, project_comments) => api.patch(`/users/${id}/project-comments`, { project_comments }),
+  toggleCreateTransactions: (id, create_transactions) => api.patch(`/users/${id}/create-transactions`, { create_transactions }),
 };
 
 // Imprest endpoints
@@ -82,6 +83,9 @@ export const transactionService = {
       },
     }),
   getByImprest: (imprestID) => api.get(`/imprestAccount_trnsctns/${imprestID}`),
+  createForImprest: (imprestId, formData) => api.post(`/imprests/${imprestId}/transactions`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
   delete: (transactionID) => api.delete(`/create_transaction/${transactionID}`),
   update: (id, data) => api.patch(`/transactions/${id}`, data),
   move: (id, imprest_id) => api.patch(`/transactions/${id}/move`, { imprest_id }),

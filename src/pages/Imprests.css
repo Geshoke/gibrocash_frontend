@@ -993,6 +993,23 @@
 .iip-tab:hover { color: #2d3748; }
 .iip-tab.active { color: #3182ce; border-bottom-color: #3182ce; font-weight: 600; }
 
+.iip-add-txn-btn {
+  flex: 0 0 auto;
+  width: 32px;
+  align-self: center;
+  margin-right: 10px;
+  background: #3182ce;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 5px 0;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.iip-add-txn-btn:hover { background: #2b6cb0; }
+
 /* ── Transactions list inside panel ─────────────────────────── */
 .iip-txn-list {
   flex: 1;
@@ -1260,3 +1277,152 @@
   border-bottom: none;
   border-top: 2px solid #e2e8f0;
 }
+
+/* ── Add Transaction modal ─────────────────────────────────────── */
+.atx-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 16px;
+}
+
+.atx-modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 460px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.atx-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.atx-modal-header h3 {
+  margin: 0 0 4px 0;
+  color: #1a365d;
+  font-size: 1.1rem;
+}
+
+.atx-modal-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #718096;
+}
+
+.atx-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  color: #718096;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+.atx-close-btn:hover:not(:disabled) { color: #1a365d; }
+.atx-close-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.atx-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.atx-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.atx-field label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #4a5568;
+}
+
+.atx-field input[type="text"],
+.atx-field input[type="number"] {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+.atx-field input:focus { outline: none; border-color: #3182ce; }
+
+.atx-field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.atx-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 16px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.atx-dropzone:hover { border-color: #2563eb; background: #eff6ff; }
+.atx-dropzone.has-file { border-color: #38a169; background: #f0fff4; }
+.atx-dropzone input[type="file"] { display: none; }
+
+.atx-dropzone-icon { font-size: 1.6rem; }
+.atx-dropzone-main { font-size: 0.85rem; font-weight: 600; color: #334155; }
+.atx-dropzone-hint { font-size: 0.72rem; color: #94a3b8; }
+
+.atx-error {
+  color: #c53030;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.atx-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.atx-cancel-btn {
+  padding: 8px 18px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4a5568;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.atx-cancel-btn:hover:not(:disabled) { background: #f7fafc; }
+.atx-cancel-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.atx-save-btn {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 6px;
+  background: #3182ce;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.atx-save-btn:hover:not(:disabled) { background: #2b6cb0; }
+.atx-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }

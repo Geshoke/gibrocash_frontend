@@ -97,6 +97,16 @@ const Users = () => {
     }
   };
 
+  const handleToggleCreateTransactions = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, create_transactions: value } : u));
+    try {
+      await userService.toggleCreateTransactions(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update add transactions:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, create_transactions: !value } : u));
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-KE', {
       year: 'numeric',
@@ -148,6 +158,7 @@ const Users = () => {
                   <th>Create Invoices</th>
                   <th>Move Transactions</th>
                   <th>Project Comments</th>
+                  <th>Add Transactions</th>
                 </tr>
               </thead>
               <tbody>
@@ -240,6 +251,17 @@ const Users = () => {
                           type="checkbox"
                           checked={u.project_comments ?? false}
                           onChange={e => handleToggleProjectComments(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.create_transactions ?? false}
+                          onChange={e => handleToggleCreateTransactions(u, e.target.checked)}
                           disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />

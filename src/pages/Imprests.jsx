@@ -4,7 +4,7 @@ import { imprestService, userService, projectService, imageService, proposalServ
 import './Imprests.css';
 
 const Imprests = () => {
-  const { user, isSuperAdmin, canViewAllImprests } = useAuth();
+  const { user, isSuperAdmin, canViewAllImprests, canCreateTransactions } = useAuth();
   const [imprests, setImprests] = useState([]);
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -22,6 +22,14 @@ const Imprests = () => {
   const [activeTab, setActiveTab] = useState('attachments');
   const [imprestTransactions, setImprestTransactions] = useState([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+
+  // Add transaction modal
+  const EMPTY_ADD_TXN_FORM = { item: '', quantity: '', unitPrice: '', vat_charged: '' };
+  const [addTxnOpen, setAddTxnOpen]       = useState(false);
+  const [addTxnForm, setAddTxnForm]       = useState(EMPTY_ADD_TXN_FORM);
+  const [addTxnFile, setAddTxnFile]       = useState(null);
+  const [addTxnSaving, setAddTxnSaving]   = useState(false);
+  const [addTxnError, setAddTxnError]     = useState('');
 
   // Proposal modal
   const [proposalModal, setProposalModal] = useState(null);
@@ -131,6 +139,64 @@ const Imprests = () => {
     setImprestTransactions([]);
     setActiveTab('attachments');
     setLightboxUrl(null);
+  };
+
+  // ── Add transaction modal ────────────────────────────────────
+  const openAddTxn = () => {
+    setAddTxnForm(EMPTY_ADD_TXN_FORM);
+    setAddTxnFile(null);
+    setAddTxnError('');
+    setAddTxnOpen(true);
+  };
+
+  const closeAddTxn = () => {
+    if (addTxnSaving) return;
+    setAddTxnOpen(false);
+    setAddTxnForm(EMPTY_ADD_TXN_FORM);
+    setAddTxnFile(null);
+    setAddTxnError('');
+  };
+
+  const submitAddTxn = async () => {
+    const { item, quantity, unitPrice, vat_charged } = addTxnForm;
+    if (!item.trim() || !quantity || !unitPrice) {
+      setAddTxnError('Item, quantity and unit price are required.');
+      return;
+    }
+    setAddTxnSaving(true);
+    setAddTxnError('');
+    try {
+      const fd = new FormData();
+      fd.append('item', item.trim());
+      fd.append('quantity', quantity);
+      fd.append('unitPrice', unitPrice);
+      fd.append('vat_charged', vat_charged || '0');
+      fd.append('user_id', user.id);
+      if (addTxnFile) fd.append('file', addTxnFile);
+
+      const res = await transactionService.createForImprest(selectedImprest.id, fd);
+      const created = res.data?.transaction;
+      if (created) {
+        setImprestTransactions(prev => [created, ...prev]);
+        const price = parseFloat(created.price) || 0;
+        setImprests(prev => prev.map(i => i.id === selectedImprest.id
+          ? { ...i, usedAmount: (parseFloat(i.usedAmount) || 0) + price }
+          : i
+        ));
+        setSelectedImprest(prev => prev
+          ? { ...prev, usedAmount: (parseFloat(prev.usedAmount) || 0) + price }
+          : prev
+        );
+      }
+      setAddTxnOpen(false);
+      setAddTxnForm(EMPTY_ADD_TXN_FORM);
+      setAddTxnFile(null);
+    } catch (err) {
+      console.error('Failed to add transaction:', err);
+      setAddTxnError(err.response?.data?.response || 'Failed to add transaction. Please try again.');
+    } finally {
+      setAddTxnSaving(false);
+    }
   };
 
   // ── Slide-in admin panel ───────────────────────────────────
@@ -449,6 +515,15 @@ const Imprests = () => {
                 >
                   Transactions
                 </button>
+                {activeTab === 'transactions' && canCreateTransactions() && (
+                  <button
+                    className="iip-add-txn-btn"
+                    onClick={openAddTxn}
+                    title="Add transaction"
+                  >
+                    +
+                  </button>
+                )}
               </div>
 
               {activeTab === 'attachments' && (
@@ -700,6 +775,85 @@ const Imprests = () => {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Transaction Modal ── */}
+      {addTxnOpen && selectedImprest && (
+        <div className="atx-modal-overlay" onClick={closeAddTxn}>
+          <div className="atx-modal" onClick={e => e.stopPropagation()}>
+            <div className="atx-modal-header">
+              <div>
+                <h3>Add Transaction</h3>
+                <p className="atx-modal-subtitle">{selectedImprest.name}</p>
+              </div>
+              <button className="atx-close-btn" onClick={closeAddTxn} disabled={addTxnSaving}>×</button>
+            </div>
+
+            <div className="atx-form">
+              <div className="atx-field">
+                <label>Item / Description</label>
+                <input
+                  type="text"
+                  value={addTxnForm.item}
+                  onChange={e => setAddTxnForm(f => ({ ...f, item: e.target.value }))}
+                />
+              </div>
+              <div className="atx-field-row">
+                <div className="atx-field">
+                  <label>Quantity</label>
+                  <input
+                    type="number" min="1" step="1"
+                    value={addTxnForm.quantity}
+                    onChange={e => setAddTxnForm(f => ({ ...f, quantity: e.target.value }))}
+                  />
+                </div>
+                <div className="atx-field">
+                  <label>Unit Price (KES)</label>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={addTxnForm.unitPrice}
+                    onChange={e => setAddTxnForm(f => ({ ...f, unitPrice: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="atx-field">
+                <label>VAT (KES)</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={addTxnForm.vat_charged}
+                  onChange={e => setAddTxnForm(f => ({ ...f, vat_charged: e.target.value }))}
+                />
+              </div>
+
+              <div className="atx-field">
+                <label>Receipt (optional)</label>
+                <label className={`atx-dropzone${addTxnFile ? ' has-file' : ''}`}>
+                  <span className="atx-dropzone-icon">🧾</span>
+                  <span className="atx-dropzone-main">
+                    {addTxnFile ? addTxnFile.name : 'Click to attach a receipt'}
+                  </span>
+                  <span className="atx-dropzone-hint">PNG or PDF · optional</span>
+                  <input
+                    type="file"
+                    accept="image/png,.pdf,application/pdf"
+                    onChange={e => setAddTxnFile(e.target.files[0] || null)}
+                  />
+                </label>
+              </div>
+
+              {addTxnError && <p className="atx-error">{addTxnError}</p>}
+
+              <div className="atx-actions">
+                <button className="atx-cancel-btn" onClick={closeAddTxn} disabled={addTxnSaving}>
+                  Cancel
+                </button>
+                <button className="atx-save-btn" onClick={submitAddTxn} disabled={addTxnSaving}>
+                  {addTxnSaving ? 'Adding…' : 'Add Transaction'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -215,9 +215,15 @@ const Transactions = () => {
     try {
       const fd = new FormData();
       fd.append('file', file);
-      await transactionService.uploadReceipt(selectedTransaction.id, fd);
+      const res = await transactionService.uploadReceipt(selectedTransaction.id, fd);
+      const filename = res.data?.file;
       // Refresh the image after successful upload
       await loadTransactionImage(selectedTransaction);
+      if (filename) {
+        const withUrl = (t) => ({ ...t, image: { ...(t.image || {}), url: filename } });
+        setTransactions(prev => prev.map(t => t.id === selectedTransaction.id ? withUrl(t) : t));
+        setSelectedTransaction(prev => prev ? withUrl(prev) : prev);
+      }
     } catch (err) {
       console.error('Receipt upload failed:', err);
       setReceiptUploadError('Upload failed. Please try again.');
@@ -557,7 +563,10 @@ const Transactions = () => {
                       </div>
                       <div className="txn-list-main">
                         <span className="txn-list-item-name">{txn.item}</span>
-                        {txn.images_id && <span className="txn-list-receipt-dot" title="Has receipt" />}
+                        <span
+                          className={`txn-list-receipt-dot ${txn.image?.url ? 'has-receipt' : 'no-receipt'}`}
+                          title={txn.image?.url ? 'Has receipt' : 'No receipt'}
+                        />
                       </div>
                       <div className="txn-list-footer">
                         <span className="txn-list-imprest">{txn.imprest?.name || '—'}</span>
