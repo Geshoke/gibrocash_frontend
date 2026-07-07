@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { proposalService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import Layout from '../components/Layout';
 import './Proposals.css';
 
 const PAGE_LIMIT = 10;
@@ -139,17 +138,14 @@ const Proposals = () => {
 
   if (loading && proposals.length === 0) {
     return (
-      <Layout>
-        <div className="loading-container">
-          <div className="spinner"></div>
-          <p>Loading...</p>
-        </div>
-      </Layout>
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Loading...</p>
+      </div>
     );
   }
 
   return (
-    <Layout>
       <div className="proposals-page">
         <div className="page-header">
           <div>
@@ -440,7 +436,6 @@ const Proposals = () => {
           </div>
         </div>
       </div>
-    </Layout>
   );
 };
 

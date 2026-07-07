@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { projectService, transactionService, categoryService, imageService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import Layout from '../components/Layout';
 import './Projects.css';
 
 const Projects = () => {
@@ -307,17 +306,15 @@ const Projects = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="loading-container">
-          <div className="spinner"></div>
-          <p>Loading...</p>
-        </div>
-      </Layout>
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Loading...</p>
+      </div>
     );
   }
 
   return (
-    <Layout>
+    <>
       <div className="projects-page">
         <div className="page-header">
           <div>
@@ -787,7 +784,7 @@ const Projects = () => {
           </div>
         </div>
       )}
-    </Layout>
+    </>
   );
 };
 

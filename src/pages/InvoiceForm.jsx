@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { invoiceService, catalogService, projectService } from '../services/api';
-import Layout from '../components/Layout';
 import './InvoiceForm.css';
 
 const TAX_TYPES = ['VAT-16', 'VAT-0', 'Exempt'];
@@ -211,7 +210,6 @@ const InvoiceForm = () => {
     new Intl.NumberFormat('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
   return (
-    <Layout>
       <div className="invoice-form-page">
         <div className="form-header">
           <div>
@@ -552,7 +550,6 @@ const InvoiceForm = () => {
           </div>
         </form>
       </div>
-    </Layout>
   );
 };
 

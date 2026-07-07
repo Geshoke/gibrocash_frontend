@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import { payoutService, imprestService, transactionService, imageService, projectService } from '../services/api';
 import './Payouts.css';
@@ -950,7 +949,7 @@ const Payouts = () => {
 
   // ── Render ───────────────────────────────────────────────────
   return (
-    <Layout>
+    <>
       <div className="po-page">
 
         {/* ── Row 1: Hero cards ─────────────────────────────── */}
@@ -2315,7 +2314,7 @@ const Payouts = () => {
           </div>
         </div>
       )}
-    </Layout>
+    </>
   );
 };
 

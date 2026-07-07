@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { imprestService, userService, projectService, imageService, proposalService, transactionService } from '../services/api';
-import Layout from '../components/Layout';
 import './Imprests.css';
 
 const Imprests = () => {
@@ -252,12 +251,10 @@ const Imprests = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="loading-container">
-          <div className="spinner"></div>
-          <p>Loading...</p>
-        </div>
-      </Layout>
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Loading...</p>
+      </div>
     );
   }
 
@@ -285,7 +282,7 @@ const Imprests = () => {
   const hasDateFilter = dateFrom || dateTo;
 
   return (
-    <Layout>
+    <>
       <div className="imprests-page">
         <div className="page-header">
           <div>
@@ -706,7 +703,7 @@ const Imprests = () => {
           </div>
         </div>
       )}
-    </Layout>
+    </>
   );
 };
 

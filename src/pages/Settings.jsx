@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { categoryService } from '../services/api';
-import Layout from '../components/Layout';
 import './Settings.css';
 
 const SECTIONS = [
@@ -65,7 +64,6 @@ const Settings = () => {
   };
 
   return (
-    <Layout>
       <div className="settings-page">
         <div className="settings-page-header">
           <h1>Settings</h1>
@@ -172,7 +170,6 @@ const Settings = () => {
           </div>
         </div>
       </div>
-    </Layout>
   );
 };
 

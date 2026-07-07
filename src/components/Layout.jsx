@@ -1,30 +1,57 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTabs, NAV_ITEMS } from '../context/TabsContext';
 import logo from '../assets/logo.png';
 import APP_VERSION from '../version';
 import './Layout.css';
 
+const PERMISSION_CHECKS = {
+  invoice: (auth) => auth.canCreateInvoices(),
+  payout: (auth) => auth.canPayout(),
+  admin: (auth) => auth.isSuperAdmin(),
+};
+
+const TabBar = () => {
+  const { tabs, activeTabId, activateTab, closeTab } = useTabs();
+
+  if (tabs.length === 0) return null;
+
+  return (
+    <div className="tab-bar">
+      {tabs.map((tab) => (
+        <div
+          key={tab.id}
+          className={`tab-item ${tab.id === activeTabId ? 'active' : ''}`}
+          onClick={() => activateTab(tab.id)}
+        >
+          <span className="tab-icon">{tab.icon}</span>
+          <span className="tab-label">{tab.label}</span>
+          <button
+            type="button"
+            className="tab-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              closeTab(tab.id);
+            }}
+            aria-label={`Close ${tab.label}`}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const Layout = ({ children }) => {
-  const { user, logout, isSuperAdmin, canPayout, canCreateInvoices } = useAuth();
+  const auth = useAuth();
+  const { user, logout } = auth;
   const location = useLocation();
 
-  const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { path: '/projects', label: 'Projects', icon: '🗂️' },
-    { path: '/imprests', label: 'Imprests', icon: '💰' },
-    { path: '/transactions', label: 'Transactions', icon: '📝' },
-    { path: '/proposals', label: 'Proposals', icon: '📋' },
-  ];
-
-  if (canCreateInvoices()) {
-    navItems.push({ path: '/invoices', label: 'Invoices', icon: '🧾' });
-  }
-  if (canPayout()) {
-    navItems.push({ path: '/payouts', label: 'Payouts', icon: '💸' });
-  }
-  if (isSuperAdmin()) {
-    navItems.push({ path: '/users', label: 'Users', icon: '👥' });
-  }
+  const navItems = NAV_ITEMS.filter((item) => {
+    if (!item.requires) return true;
+    return PERMISSION_CHECKS[item.requires]?.(auth);
+  });
 
   return (
     <div className="layout">
@@ -34,16 +61,18 @@ const Layout = ({ children }) => {
         </div>
 
         <nav className="sidebar-nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              <span className="nav-label">{item.label}</span>
-            </Link>
-          ))}
+          {navItems
+            .filter((item) => item.path !== '/settings')
+            .map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
+              >
+                <span className="nav-icon">{item.icon}</span>
+                <span className="nav-label">{item.label}</span>
+              </Link>
+            ))}
         </nav>
 
         <Link
@@ -70,7 +99,10 @@ const Layout = ({ children }) => {
       </aside>
 
       <main className="main-content">
-        {children}
+        <TabBar />
+        <div className="tab-content">
+          {children}
+        </div>
       </main>
     </div>
   );

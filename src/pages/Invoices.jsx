@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { invoiceService } from '../services/api';
-import Layout from '../components/Layout';
 import './Invoices.css';
 
 const STATUS_COLORS = { draft: 'gray', sent: 'blue', paid: 'green' };
@@ -56,7 +55,6 @@ const Invoices = () => {
   };
 
   return (
-    <Layout>
       <div className="invoices-page">
         <div className="page-header">
           <div>
@@ -170,7 +168,6 @@ const Invoices = () => {
           </div>
         )}
       </div>
-    </Layout>
   );
 };
 

@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { invoiceService } from '../services/api';
 import InvoicePDF from '../components/InvoicePDF';
-import Layout from '../components/Layout';
 import './InvoiceView.css';
 
 const STATUS_OPTIONS = ['draft', 'sent', 'paid'];
@@ -56,20 +55,16 @@ const InvoiceView = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="loading-container">
-          <div className="spinner" />
-          <p>Loading...</p>
-        </div>
-      </Layout>
+      <div className="loading-container">
+        <div className="spinner" />
+        <p>Loading...</p>
+      </div>
     );
   }
 
   if (error || !invoice) {
     return (
-      <Layout>
-        <div className="error-banner" style={{ margin: 24 }}>{error || 'Invoice not found.'}</div>
-      </Layout>
+      <div className="error-banner" style={{ margin: 24 }}>{error || 'Invoice not found.'}</div>
     );
   }
 
@@ -80,7 +75,6 @@ const InvoiceView = () => {
   const net = subtotal - taxAmount;
 
   return (
-    <Layout>
       <div className="invoice-view-page">
         {/* Top bar */}
         <div className="view-header">
@@ -254,7 +248,6 @@ const InvoiceView = () => {
           )}
         </div>
       </div>
-    </Layout>
   );
 };
 

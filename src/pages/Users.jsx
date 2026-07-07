@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { userService } from '../services/api';
-import Layout from '../components/Layout';
 import './Users.css';
 
 const Users = () => {
@@ -108,17 +107,14 @@ const Users = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="loading-container">
-          <div className="spinner"></div>
-          <p>Loading...</p>
-        </div>
-      </Layout>
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Loading...</p>
+      </div>
     );
   }
 
   return (
-    <Layout>
       <div className="users-page">
         <div className="page-header">
           <div>
@@ -256,7 +252,6 @@ const Users = () => {
           )}
         </div>
       </div>
-    </Layout>
   );
 };
 

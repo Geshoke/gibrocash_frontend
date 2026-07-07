@@ -1,7 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { TabsProvider, useTabs } from './context/TabsContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Imprests from './pages/Imprests';
@@ -16,6 +18,48 @@ import InvoiceForm from './pages/InvoiceForm';
 import InvoiceView from './pages/InvoiceView';
 import './App.css';
 
+const routeElements = [
+  { path: '/dashboard', element: <ProtectedRoute><Dashboard /></ProtectedRoute> },
+  { path: '/imprests', element: <ProtectedRoute><Imprests /></ProtectedRoute> },
+  { path: '/transactions', element: <ProtectedRoute><Transactions /></ProtectedRoute> },
+  { path: '/proposals', element: <ProtectedRoute><Proposals /></ProtectedRoute> },
+  { path: '/projects', element: <ProtectedRoute><Projects /></ProtectedRoute> },
+  { path: '/payouts', element: <ProtectedRoute require="payout"><Payouts /></ProtectedRoute> },
+  { path: '/users', element: <ProtectedRoute require="admin"><Users /></ProtectedRoute> },
+  { path: '/settings', element: <ProtectedRoute><Settings /></ProtectedRoute> },
+  { path: '/invoices', element: <ProtectedRoute require="invoice"><Invoices /></ProtectedRoute> },
+  { path: '/invoices/new', element: <ProtectedRoute require="invoice"><InvoiceForm /></ProtectedRoute> },
+  { path: '/invoices/:id/edit', element: <ProtectedRoute require="invoice"><InvoiceForm /></ProtectedRoute> },
+  { path: '/invoices/:id', element: <ProtectedRoute require="invoice"><InvoiceView /></ProtectedRoute> },
+];
+
+const TabsHost = () => {
+  const { tabs, activeTabId } = useTabs();
+
+  return (
+    <>
+      {tabs.map((tab) => (
+        <div key={tab.id} style={{ display: tab.id === activeTabId ? 'contents' : 'none' }}>
+          <Routes location={{ pathname: tab.path }}>
+            {routeElements.map((route) => (
+              <Route key={route.path} path={route.path} element={route.element} />
+            ))}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </div>
+      ))}
+    </>
+  );
+};
+
+const AuthenticatedShell = () => (
+  <TabsProvider>
+    <Layout>
+      <TabsHost />
+    </Layout>
+  </TabsProvider>
+);
+
 function App() {
   return (
     <ThemeProvider>
@@ -23,104 +67,8 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/imprests"
-            element={
-              <ProtectedRoute>
-                <Imprests />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/transactions"
-            element={
-              <ProtectedRoute>
-                <Transactions />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/proposals"
-            element={
-              <ProtectedRoute>
-                <Proposals />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/projects"
-            element={
-              <ProtectedRoute>
-                <Projects />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/payouts"
-            element={
-              <ProtectedRoute require="payout">
-                <Payouts />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/users"
-            element={
-              <ProtectedRoute require="admin">
-                <Users />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <Settings />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/invoices"
-            element={
-              <ProtectedRoute require="invoice">
-                <Invoices />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/invoices/new"
-            element={
-              <ProtectedRoute require="invoice">
-                <InvoiceForm />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/invoices/:id/edit"
-            element={
-              <ProtectedRoute require="invoice">
-                <InvoiceForm />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/invoices/:id"
-            element={
-              <ProtectedRoute require="invoice">
-                <InvoiceView />
-              </ProtectedRoute>
-            }
-          />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/*" element={<AuthenticatedShell />} />
         </Routes>
       </Router>
     </AuthProvider>

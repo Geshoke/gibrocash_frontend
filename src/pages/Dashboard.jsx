@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { imprestService, transactionService, imageService } from '../services/api';
-import Layout from '../components/Layout';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -154,17 +153,14 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="loading-container">
-          <div className="spinner"></div>
-          <p>Loading...</p>
-        </div>
-      </Layout>
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Loading...</p>
+      </div>
     );
   }
 
   return (
-    <Layout>
       <div className="dashboard">
         <div className="dashboard-header">
           <div>
@@ -405,7 +401,6 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-    </Layout>
   );
 };
 

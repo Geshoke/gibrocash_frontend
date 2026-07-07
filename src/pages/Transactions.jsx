@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { transactionService, imageService, categoryService, imprestService, projectService } from '../services/api';
-import Layout from '../components/Layout';
 import './Transactions.css';
 
 const LIMIT = 50;
@@ -446,17 +445,15 @@ const Transactions = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="loading-container">
-          <div className="spinner"></div>
-          <p>Loading transactions...</p>
-        </div>
-      </Layout>
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Loading transactions...</p>
+      </div>
     );
   }
 
   return (
-    <Layout>
+    <>
       <div className="transactions-page">
 
         {/* Header */}
@@ -963,7 +960,7 @@ const Transactions = () => {
           </div>
         </div>
       )}
-    </Layout>
+    </>
   );
 };
 
