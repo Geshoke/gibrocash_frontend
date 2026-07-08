@@ -207,7 +207,7 @@ const Payouts = () => {
         ? (b2cResult.value.data.payments || []).map(p => ({
             id:          `b2c-${p.id}`,
             type:        p.occasion || 'single',
-            label:       p.remarks || '—',
+            label:       p.description || p.remarks || '—',
             amount:      parseFloat(p.amount),
             date:        p.initiatedAt,
             status:      mapDbStatus(p.status),
@@ -724,7 +724,7 @@ const Payouts = () => {
     const selectedProject = projectId ? projects.find(p => p.id === projectId) : null;
     const label  = `Payment to ${contact}`;
     const amt    = parseFloat(amount) || 0;
-    const payload = { phoneNumber: normalizePhone(contact), amount: amt, remarks: description || 'Transaction Payout' };
+    const payload = { phoneNumber: normalizePhone(contact), amount: amt, remarks: description || 'Transaction Payout', description };
     setTxnRequesting(true);
     try {
       const { data } = await payoutService.request({ type: 'txn_payout', payload, label, amount: amt, initiatedBy: user.name });
