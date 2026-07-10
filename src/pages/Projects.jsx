@@ -149,7 +149,10 @@ const Projects = () => {
         || response.data?.transactions
         || response.data?.response
         || [];
-      setImprestTransactions(prev => ({ ...prev, [imprestId]: txns }));
+      const sortedTxns = [...txns].sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      );
+      setImprestTransactions(prev => ({ ...prev, [imprestId]: sortedTxns }));
     } catch (err) {
       console.error('Failed to load transactions:', err);
       setImprestTransactions(prev => ({ ...prev, [imprestId]: [] }));
