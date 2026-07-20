@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
-import { payoutService, imprestService, transactionService, imageService, projectService } from '../services/api';
+import { payoutService, imprestService, transactionService, imageService, projectService, recipientService } from '../services/api';
+import RecipientPicker from '../components/RecipientPicker';
 import './Payouts.css';
 
 // ── Constants ──────────────────────────────────────────────────
@@ -78,16 +79,30 @@ const getTxnTotals = (form) => {
 
 // ── Component ──────────────────────────────────────────────────
 const Payouts = () => {
-  const { user, canViewAllImprests } = useAuth();
+  const { user, canViewAllImprests, canEditContacts } = useAuth();
   const [view, setView] = useState('history');
 
-  // ── Contacts (persisted in localStorage) ────────────────────
-  const [contacts, setContacts] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('gibrocash_contacts') || '[]'); }
-    catch { return []; }
-  });
+  // ── Contacts (backend-backed recipient directory) ────────────
+  const [contacts, setContacts] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(true);
   const [contactForm, setContactForm] = useState({ staffNo: '', name: '', phoneNumber: '' });
   const [contactError, setContactError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await recipientService.getAll();
+        const rows = (data.contacts || []).map(c => ({
+          id: c.id, staffNo: c.staff_no || '', name: c.name, phoneNumber: c.phone,
+        }));
+        setContacts(rows);
+      } catch (err) {
+        console.error('Failed to load contacts:', err);
+      } finally {
+        setContactsLoading(false);
+      }
+    })();
+  }, []);
 
   // ── Payroll (Excel import) ───────────────────────────────────
   const [payrollName, setPayrollName] = useState('');
@@ -247,11 +262,6 @@ const Payouts = () => {
   };
 
   useEffect(() => { fetchLedger(); }, []); // eslint-disable-line
-
-  // Persist contacts to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('gibrocash_contacts', JSON.stringify(contacts));
-  }, [contacts]);
 
   // Persist failed txn ledger
   useEffect(() => {
@@ -616,7 +626,7 @@ const Payouts = () => {
   };
 
   // ── Contacts CRUD ────────────────────────────────────────────
-  const addContact = () => {
+  const addContact = async () => {
     const name    = contactForm.name.trim();
     const phone   = contactForm.phoneNumber.trim();
     const staffNo = contactForm.staffNo.trim();
@@ -630,15 +640,27 @@ const Payouts = () => {
       setContactError(`A contact named "${name}" already exists.`);
       return;
     }
-    setContacts(prev => [
-      ...prev,
-      { id: Date.now().toString(), staffNo, name, phoneNumber: normalizePhone(phone) },
-    ]);
-    setContactForm({ staffNo: '', name: '', phoneNumber: '' });
-    setContactError('');
+    try {
+      const { data } = await recipientService.create({ name, phone, staff_no: staffNo || undefined });
+      const c = data.contact;
+      setContacts(prev => [...prev, { id: c.id, staffNo: c.staff_no || '', name: c.name, phoneNumber: c.phone }]);
+      setContactForm({ staffNo: '', name: '', phoneNumber: '' });
+      setContactError('');
+    } catch (err) {
+      setContactError(err.response?.data?.message || 'Failed to save contact. Please try again.');
+    }
   };
 
-  const deleteContact = (id) => setContacts(prev => prev.filter(c => c.id !== id));
+  const deleteContact = async (id) => {
+    const prev = contacts;
+    setContacts(prev.filter(c => c.id !== id));
+    try {
+      await recipientService.delete(id);
+    } catch (err) {
+      console.error('Failed to delete contact:', err);
+      setContacts(prev);
+    }
+  };
 
   // ── Submit handlers ──────────────────────────────────────────
   const resolvedRows = xlsxRows.map(r => ({
@@ -1326,9 +1348,11 @@ const Payouts = () => {
                   <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
                   <div className="po-field">
                     <label>Contact / Phone Number</label>
-                    <input type="text" value={single.contact}
-                      onChange={e => setSingle(p => ({ ...p, contact: e.target.value }))}
-                      placeholder="e.g. 0712345678" />
+                    <RecipientPicker
+                      value={single.contact}
+                      onChange={v => setSingle(p => ({ ...p, contact: v }))}
+                      recipients={contacts.map(c => ({ id: c.id, name: c.name, phone: c.phoneNumber }))}
+                    />
                   </div>
                   <div className="po-field">
                     <label>Amount (KES)</label>
@@ -1554,11 +1578,10 @@ const Payouts = () => {
                   <div className="po-txp-section-label">Step 3 — Payment Details</div>
                   <div className="po-field">
                     <label>Recipient Phone Number</label>
-                    <input
-                      type="text"
+                    <RecipientPicker
                       value={txnPayout.contact}
-                      onChange={e => setTxnPayout(p => ({ ...p, contact: e.target.value }))}
-                      placeholder="e.g. 0712345678"
+                      onChange={v => setTxnPayout(p => ({ ...p, contact: v }))}
+                      recipients={contacts.map(c => ({ id: c.id, name: c.name, phone: c.phoneNumber }))}
                     />
                   </div>
                   <div className="po-field">
@@ -1786,11 +1809,10 @@ const Payouts = () => {
                       <div className="po-batch-phone-section">
                         <div className="po-field">
                           <label>Recipient Phone Number</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. 0712345678"
+                          <RecipientPicker
                             value={batchPhone}
-                            onChange={e => { setBatchPhone(e.target.value); setBatchSubmitError(''); }}
+                            onChange={v => { setBatchPhone(v); setBatchSubmitError(''); }}
+                            recipients={contacts.map(c => ({ id: c.id, name: c.name, phone: c.phoneNumber }))}
                           />
                         </div>
                         {batchItems.length > 0 && batchPhone && (
@@ -1820,54 +1842,60 @@ const Payouts = () => {
                 <div className="po-panel-header">
                   <div>
                     <h2>Employee Contacts</h2>
-                    <p>Phone numbers saved here auto-fill during payroll import.</p>
+                    <p>Saved recipients — pick them from the picker button on payout forms, or auto-fill during payroll import.</p>
                   </div>
                 </div>
                 <div className="po-form">
 
-                  {/* Add contact form */}
-                  <div className="po-contacts-section">
-                    <h3 className="po-section-title">Add Contact</h3>
-                    <div className="po-contacts-grid">
-                      <div className="po-field">
-                        <label>Employee Name *</label>
-                        <input
-                          type="text"
-                          value={contactForm.name}
-                          onChange={e => setContactForm(p => ({ ...p, name: e.target.value }))}
-                          placeholder="e.g. Joel Thamu Kibuna"
-                          onKeyDown={e => e.key === 'Enter' && addContact()}
-                        />
+                  {/* Add contact form — edit_contacts permission required */}
+                  {canEditContacts() ? (
+                    <div className="po-contacts-section">
+                      <h3 className="po-section-title">Add Contact</h3>
+                      <div className="po-contacts-grid">
+                        <div className="po-field">
+                          <label>Employee Name *</label>
+                          <input
+                            type="text"
+                            value={contactForm.name}
+                            onChange={e => setContactForm(p => ({ ...p, name: e.target.value }))}
+                            placeholder="e.g. Joel Thamu Kibuna"
+                            onKeyDown={e => e.key === 'Enter' && addContact()}
+                          />
+                        </div>
+                        <div className="po-field">
+                          <label>Staff No <span className="po-label-opt">(optional)</span></label>
+                          <input
+                            type="text"
+                            value={contactForm.staffNo}
+                            onChange={e => setContactForm(p => ({ ...p, staffNo: e.target.value }))}
+                            placeholder="e.g. 13"
+                            onKeyDown={e => e.key === 'Enter' && addContact()}
+                          />
+                        </div>
+                        <div className="po-field">
+                          <label>Phone Number *</label>
+                          <input
+                            type="text"
+                            value={contactForm.phoneNumber}
+                            onChange={e => setContactForm(p => ({ ...p, phoneNumber: e.target.value }))}
+                            placeholder="e.g. 0712345678"
+                            onKeyDown={e => e.key === 'Enter' && addContact()}
+                          />
+                        </div>
                       </div>
-                      <div className="po-field">
-                        <label>Staff No <span className="po-label-opt">(optional)</span></label>
-                        <input
-                          type="text"
-                          value={contactForm.staffNo}
-                          onChange={e => setContactForm(p => ({ ...p, staffNo: e.target.value }))}
-                          placeholder="e.g. 13"
-                          onKeyDown={e => e.key === 'Enter' && addContact()}
-                        />
-                      </div>
-                      <div className="po-field">
-                        <label>Phone Number *</label>
-                        <input
-                          type="text"
-                          value={contactForm.phoneNumber}
-                          onChange={e => setContactForm(p => ({ ...p, phoneNumber: e.target.value }))}
-                          placeholder="e.g. 0712345678"
-                          onKeyDown={e => e.key === 'Enter' && addContact()}
-                        />
-                      </div>
+                      {contactError && <p className="po-field-error">{contactError}</p>}
+                      <button className="po-add-contact-btn" onClick={addContact}>
+                        + Add Contact
+                      </button>
                     </div>
-                    {contactError && <p className="po-field-error">{contactError}</p>}
-                    <button className="po-add-contact-btn" onClick={addContact}>
-                      + Add Contact
-                    </button>
-                  </div>
+                  ) : (
+                    <p className="po-hint">You don't have permission to edit contacts. Contact your administrator for edit access.</p>
+                  )}
 
                   {/* Contact list */}
-                  {contacts.length > 0 ? (
+                  {contactsLoading ? (
+                    <div className="po-empty"><p>Loading contacts…</p></div>
+                  ) : contacts.length > 0 ? (
                     <div className="po-table-wrap">
                       <div className="po-contacts-count">{contacts.length} contact{contacts.length !== 1 ? 's' : ''} saved</div>
                       <table className="po-table">
@@ -1886,13 +1914,15 @@ const Payouts = () => {
                               <td>{c.name}</td>
                               <td className="td-mono">{c.phoneNumber}</td>
                               <td>
-                                <button
-                                  className="po-del-btn"
-                                  onClick={() => deleteContact(c.id)}
-                                  title="Remove contact"
-                                >
-                                  ✕
-                                </button>
+                                {canEditContacts() && (
+                                  <button
+                                    className="po-del-btn"
+                                    onClick={() => deleteContact(c.id)}
+                                    title="Remove contact"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           ))}

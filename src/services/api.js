@@ -53,6 +53,15 @@ export const userService = {
   toggleMoveTransactions: (id, move_transactions) => api.patch(`/users/${id}/move-transactions`, { move_transactions }),
   toggleProjectComments: (id, project_comments) => api.patch(`/users/${id}/project-comments`, { project_comments }),
   toggleCreateTransactions: (id, create_transactions) => api.patch(`/users/${id}/create-transactions`, { create_transactions }),
+  toggleEditContacts: (id, edit_contacts) => api.patch(`/users/${id}/edit-contacts`, { edit_contacts }),
+};
+
+// Payout recipient directory endpoints
+export const recipientService = {
+  getAll: () => api.get('/payout-contacts'),
+  create: (data) => api.post('/payout-contacts', data),
+  update: (id, data) => api.patch(`/payout-contacts/${id}`, data),
+  delete: (id) => api.delete(`/payout-contacts/${id}`),
 };
 
 // Imprest endpoints
