@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { invoiceService } from '../services/api';
+import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Invoices.css';
 
 const STATUS_COLORS = { draft: 'gray', sent: 'blue', paid: 'green' };
@@ -16,9 +17,11 @@ const Invoices = () => {
     fetchInvoices();
   }, [filters]);
 
-  const fetchInvoices = async () => {
+  useTabRefresh('/invoices', () => fetchInvoices(true));
+
+  const fetchInvoices = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const params = {};
       if (filters.status) params.status = filters.status;

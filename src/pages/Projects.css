@@ -59,6 +59,27 @@
   z-index: 10;
 }
 
+.projects-list-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.new-project-btn {
+  background: #3182ce;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.new-project-btn:hover { background: #2b6cb0; }
+
 .project-search-input {
   width: 100%;
   padding: 8px 12px;
@@ -222,6 +243,25 @@
   color: #718096;
   font-size: 0.9rem;
 }
+
+.detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.edit-project-btn {
+  background: none;
+  border: 1px solid #cbd5e0;
+  color: #4a5568;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.edit-project-btn:hover { background: #f7fafc; }
 
 .detail-summary {
   display: grid;
@@ -894,6 +934,57 @@
 }
 
 .modal-cancel-btn:hover { background: #e2e8f0; }
+
+.modal-save-btn {
+  background: #3182ce;
+  border: none;
+  color: #fff;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.modal-save-btn:hover:not(:disabled) { background: #2b6cb0; }
+.modal-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 24px;
+}
+
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modal-field label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #4a5568;
+}
+
+.modal-field input,
+.modal-field textarea {
+  padding: 8px 10px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  box-sizing: border-box;
+  resize: vertical;
+}
+.modal-field input:focus,
+.modal-field textarea:focus { outline: none; border-color: #3182ce; }
+
+.modal-error {
+  color: #c53030;
+  font-size: 0.82rem;
+  margin: 0;
+}
 
 /* ── Comment Bubble ──────────────────────────────────────── */
 

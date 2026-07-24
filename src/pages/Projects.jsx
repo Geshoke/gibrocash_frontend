@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { projectService, transactionService, categoryService, imageService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Projects.css';
 
 const Projects = () => {
-  const { user, canViewAllImprests, canViewProjectComments } = useAuth();
+  const { user, canViewAllImprests, canViewProjectComments, canManageProjects } = useAuth();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectDetail, setProjectDetail] = useState(null);
@@ -31,10 +32,21 @@ const Projects = () => {
   const [newComment, setNewComment] = useState('');
   const [savingComment, setSavingComment] = useState(false);
 
+  // Create/edit project modal
+  const [projectModalMode, setProjectModalMode] = useState(null); // null | 'create' | 'edit'
+  const [projectForm, setProjectForm] = useState({ name: '', description: '' });
+  const [savingProject, setSavingProject] = useState(false);
+  const [projectFormError, setProjectFormError] = useState('');
+
   useEffect(() => {
     fetchProjects();
     fetchCategories();
   }, []);
+
+  useTabRefresh('/projects', () => {
+    fetchProjects(true);
+    fetchCategories();
+  });
 
   useEffect(() => {
     if (!categoryPopoverTxnId) return;
@@ -50,9 +62,9 @@ const Projects = () => {
     return () => document.removeEventListener('click', close);
   }, [movePopoverImprestId]);
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const response = await projectService.getAll();
       setProjects(response.data.projects || []);
@@ -125,6 +137,63 @@ const Projects = () => {
     }
 
     if (commentsOpen) fetchComments(project.id);
+  };
+
+  const openCreateProjectModal = () => {
+    setProjectForm({ name: '', description: '' });
+    setProjectFormError('');
+    setProjectModalMode('create');
+  };
+
+  const openEditProjectModal = () => {
+    if (!projectDetail) return;
+    setProjectForm({ name: projectDetail.name || '', description: projectDetail.description || '' });
+    setProjectFormError('');
+    setProjectModalMode('edit');
+  };
+
+  const closeProjectModal = () => {
+    if (savingProject) return;
+    setProjectModalMode(null);
+  };
+
+  const submitProjectForm = async () => {
+    if (!projectForm.name.trim()) {
+      setProjectFormError('Project name is required.');
+      return;
+    }
+
+    setSavingProject(true);
+    setProjectFormError('');
+
+    try {
+      if (projectModalMode === 'create') {
+        const response = await projectService.create({
+          name: projectForm.name.trim(),
+          description: projectForm.description.trim() || null,
+          createdBy: user.id,
+        });
+        const newProject = response.data.project;
+        setProjectModalMode(null);
+        await fetchProjects(true);
+        handleSelectProject({ id: newProject.id, name: newProject.name });
+      } else if (projectModalMode === 'edit' && selectedProject) {
+        const response = await projectService.update(selectedProject.id, {
+          name: projectForm.name.trim(),
+          description: projectForm.description.trim() || null,
+        });
+        const updated = response.data.project;
+        setProjectDetail(prev => prev ? { ...prev, name: updated.name, description: updated.description } : prev);
+        setSelectedProject(prev => prev ? { ...prev, name: updated.name, description: updated.description } : prev);
+        setProjectModalMode(null);
+        fetchProjects(true);
+      }
+    } catch (err) {
+      console.error('Failed to save project:', err);
+      setProjectFormError(err.response?.data?.message || 'Failed to save project.');
+    } finally {
+      setSavingProject(false);
+    }
   };
 
   const handleImprestClick = async (imprestId) => {
@@ -332,7 +401,14 @@ const Projects = () => {
           {/* Projects List */}
           <div className="projects-list-panel">
             <div className="projects-list-header">
-              <h2>All Projects</h2>
+              <div className="projects-list-title-row">
+                <h2>All Projects</h2>
+                {canManageProjects() && (
+                  <button className="new-project-btn" onClick={openCreateProjectModal}>
+                    + New Project
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 className="project-search-input"
@@ -419,9 +495,16 @@ const Projects = () => {
                       <p className="detail-description">{projectDetail.description}</p>
                     )}
                   </div>
-                  <span className={`status-badge large ${getStatusClass(projectDetail.status)}`}>
-                    {projectDetail.status}
-                  </span>
+                  <div className="detail-header-actions">
+                    <span className={`status-badge large ${getStatusClass(projectDetail.status)}`}>
+                      {projectDetail.status}
+                    </span>
+                    {canManageProjects() && (
+                      <button className="edit-project-btn" onClick={openEditProjectModal}>
+                        Edit
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="detail-summary">
@@ -783,6 +866,46 @@ const Projects = () => {
                 Remove from project
               </button>
               <button className="modal-cancel-btn" onClick={() => setMoveModalImprest(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create/Edit Project Modal */}
+      {projectModalMode && (
+        <div className="modal-overlay" onClick={closeProjectModal}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{projectModalMode === 'create' ? 'New Project' : 'Edit Project'}</h3>
+              <button className="modal-close-btn" onClick={closeProjectModal} disabled={savingProject}>×</button>
+            </div>
+            <div className="modal-form">
+              <div className="modal-field">
+                <label>Name</label>
+                <input
+                  type="text"
+                  value={projectForm.name}
+                  onChange={e => setProjectForm(f => ({ ...f, name: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+              <div className="modal-field">
+                <label>Description</label>
+                <textarea
+                  rows={3}
+                  value={projectForm.description}
+                  onChange={e => setProjectForm(f => ({ ...f, description: e.target.value }))}
+                />
+              </div>
+              {projectFormError && <p className="modal-error">{projectFormError}</p>}
+            </div>
+            <div className="modal-footer">
+              <button className="modal-cancel-btn" onClick={closeProjectModal} disabled={savingProject}>
+                Cancel
+              </button>
+              <button className="modal-save-btn" onClick={submitProjectForm} disabled={savingProject}>
+                {savingProject ? 'Saving…' : projectModalMode === 'create' ? 'Create Project' : 'Save Changes'}
+              </button>
             </div>
           </div>
         </div>

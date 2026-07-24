@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { transactionService, imageService, categoryService, imprestService, projectService } from '../services/api';
+import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Transactions.css';
 
 const LIMIT = 50;
@@ -79,6 +80,8 @@ const Transactions = () => {
     if (user) fetchTransactions();
   }, [user, appliedFilters]); // eslint-disable-line
 
+  useTabRefresh('/transactions', () => { if (user) fetchTransactions(true); });
+
   useEffect(() => {
     if (!categoryPopoverOpen) return;
     const close = () => setCategoryPopoverOpen(false);
@@ -111,10 +114,12 @@ const Transactions = () => {
 
   // ── Data fetchers ─────────────────────────────────────────────
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (silent = false) => {
     try {
-      setLoading(true);
-      setSelectedTransaction(null);
+      if (!silent) {
+        setLoading(true);
+        setSelectedTransaction(null);
+      }
       const userId = canViewAllImprests() ? undefined : user.id;
       const response = await transactionService.getAll(userId, 1, LIMIT, appliedFilters);
       const rows  = response.data?.transactions?.rows  || [];

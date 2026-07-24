@@ -54,6 +54,7 @@ export const userService = {
   toggleProjectComments: (id, project_comments) => api.patch(`/users/${id}/project-comments`, { project_comments }),
   toggleCreateTransactions: (id, create_transactions) => api.patch(`/users/${id}/create-transactions`, { create_transactions }),
   toggleEditContacts: (id, edit_contacts) => api.patch(`/users/${id}/edit-contacts`, { edit_contacts }),
+  toggleManageProjects: (id, manage_projects) => api.patch(`/users/${id}/manage-projects`, { manage_projects }),
 };
 
 // Payout recipient directory endpoints
@@ -125,6 +126,8 @@ export const proposalService = {
 export const projectService = {
   getAll: () => api.get('/projects'),
   getById: (id) => api.get(`/projects/${id}`),
+  create: (data) => api.post('/create_project', data),
+  update: (id, data) => api.patch(`/projects/${id}`, data),
   assignImprest: (imprestId, projectId) =>
     api.patch(`/imprest/${imprestId}/assign-project`, { project_id: projectId }),
   getComments: (id) => api.get(`/projects/${id}/comments`),

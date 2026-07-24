@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { imprestService, userService, projectService, imageService, proposalService, transactionService } from '../services/api';
+import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Imprests.css';
 
 const Imprests = () => {
@@ -49,9 +50,11 @@ const Imprests = () => {
     fetchData();
   }, [user]);
 
-  const fetchData = async () => {
+  useTabRefresh('/imprests', () => fetchData(true));
+
+  const fetchData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
 
       if (canViewAllImprests()) {

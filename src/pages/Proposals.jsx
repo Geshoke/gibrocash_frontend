@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { proposalService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Proposals.css';
 
 const PAGE_LIMIT = 10;
@@ -32,6 +33,11 @@ const Proposals = () => {
     if (admin) fetchUsers();
   }, []);
 
+  useTabRefresh('/proposals', () => {
+    fetchProposals(page, appliedFilters, true);
+    if (admin) fetchUsers();
+  });
+
   const fetchUsers = async () => {
     try {
       const res = await userService.getUsers(user.id);
@@ -41,9 +47,9 @@ const Proposals = () => {
     }
   };
 
-  const fetchProposals = async (targetPage, filters) => {
+  const fetchProposals = async (targetPage, filters, silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const params = { page: targetPage, limit: PAGE_LIMIT };
       if (filters.dateFrom) params.dateFrom = filters.dateFrom;

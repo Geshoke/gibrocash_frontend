@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { userService } from '../services/api';
+import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Users.css';
 
 const Users = () => {
@@ -13,9 +14,11 @@ const Users = () => {
     fetchUsers();
   }, [user]);
 
-  const fetchUsers = async () => {
+  useTabRefresh('/users', () => fetchUsers(true));
+
+  const fetchUsers = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const response = await userService.getUsers(user.id);
       setUsers(response.data.response || []);
@@ -117,6 +120,16 @@ const Users = () => {
     }
   };
 
+  const handleToggleManageProjects = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, manage_projects: value } : u));
+    try {
+      await userService.toggleManageProjects(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update manage projects:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, manage_projects: !value } : u));
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-KE', {
       year: 'numeric',
@@ -170,6 +183,7 @@ const Users = () => {
                   <th>Project Comments</th>
                   <th>Add Transactions</th>
                   <th>Edit Contacts</th>
+                  <th>Manage Projects</th>
                 </tr>
               </thead>
               <tbody>
@@ -284,6 +298,17 @@ const Users = () => {
                           type="checkbox"
                           checked={u.edit_contacts ?? false}
                           onChange={e => handleToggleEditContacts(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.manage_projects ?? false}
+                          onChange={e => handleToggleManageProjects(u, e.target.checked)}
                           disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { imprestService, transactionService, imageService } from '../services/api';
+import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -22,6 +23,11 @@ const Dashboard = () => {
   useEffect(() => {
     fetchData();
   }, [user]);
+
+  useTabRefresh('/dashboard', () => {
+    fetchData(true);
+    if (selectedImprest) refreshSelectedImprestTransactions();
+  });
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -89,6 +95,17 @@ const Dashboard = () => {
     } catch (err) {
       console.error('Failed to load transactions:', err);
       setTransactions([]);
+    }
+  };
+
+  const refreshSelectedImprestTransactions = async () => {
+    if (!selectedImprest) return;
+    try {
+      const response = await transactionService.getByImprest(selectedImprest.id);
+      const txns = response.data?.transactions?.rows;
+      setTransactions(Array.isArray(txns) ? txns : []);
+    } catch (err) {
+      console.error('Failed to refresh transactions:', err);
     }
   };
 

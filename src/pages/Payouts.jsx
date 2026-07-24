@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
 import { payoutService, imprestService, transactionService, imageService, projectService, recipientService } from '../services/api';
 import RecipientPicker from '../components/RecipientPicker';
+import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Payouts.css';
 
 // ── Constants ──────────────────────────────────────────────────
@@ -88,21 +89,22 @@ const Payouts = () => {
   const [contactForm, setContactForm] = useState({ staffNo: '', name: '', phoneNumber: '' });
   const [contactError, setContactError] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await recipientService.getAll();
-        const rows = (data.contacts || []).map(c => ({
-          id: c.id, staffNo: c.staff_no || '', name: c.name, phoneNumber: c.phone,
-        }));
-        setContacts(rows);
-      } catch (err) {
-        console.error('Failed to load contacts:', err);
-      } finally {
-        setContactsLoading(false);
-      }
-    })();
-  }, []);
+  const fetchContacts = async (silent = false) => {
+    try {
+      if (!silent) setContactsLoading(true);
+      const { data } = await recipientService.getAll();
+      const rows = (data.contacts || []).map(c => ({
+        id: c.id, staffNo: c.staff_no || '', name: c.name, phoneNumber: c.phone,
+      }));
+      setContacts(rows);
+    } catch (err) {
+      console.error('Failed to load contacts:', err);
+    } finally {
+      if (!silent) setContactsLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchContacts(); }, []);
 
   // ── Payroll (Excel import) ───────────────────────────────────
   const [payrollName, setPayrollName] = useState('');
@@ -262,6 +264,11 @@ const Payouts = () => {
   };
 
   useEffect(() => { fetchLedger(); }, []); // eslint-disable-line
+
+  useTabRefresh('/payouts', () => {
+    fetchLedger();
+    fetchContacts(true);
+  });
 
   // Persist failed txn ledger
   useEffect(() => {
