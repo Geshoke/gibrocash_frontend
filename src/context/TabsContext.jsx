@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
@@ -67,11 +67,17 @@ export const TabsProvider = ({ children }) => {
     setActiveTabId(tab.id);
   }, [location.pathname]);
 
+  // Clear tabs when a logged-in user logs out. Skips the initial mount so it
+  // doesn't wipe out the tab the effect above just added for a visitor who
+  // was never authenticated in the first place (isAuthenticated starts
+  // `false` for them too, which looks identical to "just logged out").
+  const wasAuthenticatedRef = useRef(isAuthenticated);
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (wasAuthenticatedRef.current && !isAuthenticated) {
       setTabs([]);
       setActiveTabId(null);
     }
+    wasAuthenticatedRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
   const activateTab = useCallback((id) => {

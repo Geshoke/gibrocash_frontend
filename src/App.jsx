@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { TabsProvider, useTabs } from './context/TabsContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -52,13 +52,22 @@ const TabsHost = () => {
   );
 };
 
-const AuthenticatedShell = () => (
-  <TabsProvider>
-    <Layout>
-      <TabsHost />
-    </Layout>
-  </TabsProvider>
-);
+const AuthenticatedShell = () => {
+  const { isAuthenticated, loading } = useAuth();
+
+  // Gate auth here, before TabsProvider mounts, so an unauthenticated visitor
+  // is always redirected regardless of the tab system's internal state.
+  if (loading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  return (
+    <TabsProvider>
+      <Layout>
+        <TabsHost />
+      </Layout>
+    </TabsProvider>
+  );
+};
 
 function App() {
   return (

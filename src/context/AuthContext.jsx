@@ -48,6 +48,7 @@ export const AuthProvider = ({ children }) => {
       project_comments: profile?.project_comments ?? false,
       create_transactions: profile?.create_transactions ?? false,
       edit_contacts: profile?.edit_contacts ?? false,
+      manage_projects: profile?.manage_projects ?? false,
     };
 
     localStorage.setItem('user', JSON.stringify(userObj));
@@ -102,6 +103,10 @@ export const AuthProvider = ({ children }) => {
     return user?.edit_contacts === true;
   };
 
+  const canManageProjects = () => {
+    return user?.manage_projects === true;
+  };
+
   const value = {
     user,
     login,
@@ -116,6 +121,7 @@ export const AuthProvider = ({ children }) => {
     canViewProjectComments,
     canCreateTransactions,
     canEditContacts,
+    canManageProjects,
     isAuthenticated: !!user,
     loading,
   };
