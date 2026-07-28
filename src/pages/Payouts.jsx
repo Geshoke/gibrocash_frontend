@@ -1000,7 +1000,7 @@ const Payouts = () => {
     setBatchRequesting(true);
     setBatchSubmitError('');
     try {
-      const { data } = await payoutService.request({ type: 'single', payload, label, amount: total, initiatedBy: user.name });
+      const { data } = await payoutService.request({ type: 'batch_payout', payload, label, amount: total, initiatedBy: user.name });
       setModalStep('pin');
       openModal('batch_payout', label, total, { batchItems: [...batchItems], contact: batchPhone }, data.payoutId);
     } catch {
