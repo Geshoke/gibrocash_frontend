@@ -184,6 +184,10 @@ export const payoutService = {
   // Fetch persisted B2B payment ledger from DB
   getB2bPayments: () =>
     paybillApi.get('/shortcode_3576329/b2b/payments'),
+
+  // Last-known working + utility account balance (from most recent B2C callback)
+  getBalance: () =>
+    paybillApi.get('/shortcode_3576329/b2c/balance'),
 };
 
 // Invoice endpoints

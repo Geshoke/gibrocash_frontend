@@ -86,6 +86,12 @@
 
 .po-hero-card.secondary .po-hero-sub { color: #718096; margin-bottom: 0; }
 
+.po-hero-as-of {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.45);
+  margin-top: 8px;
+}
+
 .po-hero-indicators {
   display: flex;
   gap: 16px;

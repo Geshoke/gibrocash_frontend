@@ -182,6 +182,9 @@ const Payouts = () => {
   const [pollingError, setPollingError] = useState('');
   const pollRef                         = useRef(null);
 
+  // ── Account balance (last-known from B2C callbacks) ──────────
+  const [balance, setBalance] = useState({ workingAccountFunds: null, utilityAccountFunds: null, asOf: null });
+
   // ── Failed imprest-transaction ledger (localStorage) ────────
   const [failedTxns, setFailedTxns] = useState(() => {
     try { return JSON.parse(localStorage.getItem('gibrocash_failed_txns') || '[]'); }
@@ -263,11 +266,19 @@ const Payouts = () => {
     });
   };
 
-  useEffect(() => { fetchLedger(); }, []); // eslint-disable-line
+  const fetchBalance = async () => {
+    try {
+      const { data } = await payoutService.getBalance();
+      setBalance(data);
+    } catch { /* balance display is best-effort */ }
+  };
+
+  useEffect(() => { fetchLedger(); fetchBalance(); }, []); // eslint-disable-line
 
   useTabRefresh('/payouts', () => {
     fetchLedger();
     fetchContacts(true);
+    fetchBalance();
   });
 
   // Persist failed txn ledger
@@ -985,17 +996,24 @@ const Payouts = () => {
         <div className="po-hero-row">
           <div className="po-hero-card primary">
             <div className="po-hero-pill">● AVAILABLE TO DISBURSE</div>
-            <div className="po-hero-amount">KES —</div>
+            <div className="po-hero-amount">
+              {balance.utilityAccountFunds !== null ? fmtCur(balance.utilityAccountFunds) : 'KES —'}
+            </div>
             <div className="po-hero-sub">Source: <span className="po-hero-src">M-Pesa Business Account</span></div>
             <div className="po-hero-indicators">
               <span className="po-ind"><span className="po-ind-dot green"></span>System operational</span>
               <span className="po-ind"><span className="po-ind-dot blue"></span>Daraja API connected</span>
             </div>
+            {balance.asOf && (
+              <div className="po-hero-as-of">As of {fmtDate(balance.asOf)}</div>
+            )}
           </div>
 
           <div className="po-hero-card secondary">
-            <div className="po-hero-pill muted">AMOUNT IN ACCOUNT</div>
-            <div className="po-hero-amount dim">KES —</div>
+            <div className="po-hero-pill muted">WORKING ACCOUNT BALANCE</div>
+            <div className="po-hero-amount dim">
+              {balance.workingAccountFunds !== null ? fmtCur(balance.workingAccountFunds) : 'KES —'}
+            </div>
             <div className="po-hero-sub">Working balance available for disbursement</div>
           </div>
         </div>
