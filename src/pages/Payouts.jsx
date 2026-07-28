@@ -191,6 +191,9 @@ const Payouts = () => {
     catch { return []; }
   });
 
+  // ── Server-sourced unrecorded txn_payouts (persistent, survives browser close) ──
+  const [serverFailedTxns, setServerFailedTxns] = useState([]);
+
   // ── Retry modal ──────────────────────────────────────────────
   const [retryEntry, setRetryEntry]       = useState(null);
   const [retryForm, setRetryForm]         = useState({ item: '', quantity: '1', unitPrice: '', vatEnabled: false });
@@ -273,12 +276,40 @@ const Payouts = () => {
     } catch { /* balance display is best-effort */ }
   };
 
-  useEffect(() => { fetchLedger(); fetchBalance(); }, []); // eslint-disable-line
+  const fetchUnrecordedTxnPayouts = async () => {
+    try {
+      const { data } = await payoutService.getUnrecordedTxnPayouts();
+      const entries = (data.payments || []).map(p => ({
+        id: `server-${p.originatorConversationId}`,
+        createdAt: p.initiatedAt,
+        payoutLabel: p.remarks || '—',
+        payoutAmount: parseFloat(p.amount),
+        imprestName: p.payoutMeta?.imprestName || 'Expenses',
+        imprestProject: p.payoutMeta?.imprestProject || null,
+        isServerEntry: true,
+        originatorConversationId: p.originatorConversationId,
+        transactionData: {
+          imprestAccount_id: p.payoutMeta?.imprestId   || null,
+          item:              p.payoutMeta?.description || '',
+          itemQuantity:      1,
+          unitPrice:         parseFloat(p.amount),
+          Total_amount:      parseFloat(p.amount),
+          userID:            p.payoutMeta?.userId      || null,
+          vat_charged:       0,
+          url_image:         null,
+        },
+      }));
+      setServerFailedTxns(entries);
+    } catch { /* silent — server entries are a recovery aid, not critical */ }
+  };
+
+  useEffect(() => { fetchLedger(); fetchBalance(); fetchUnrecordedTxnPayouts(); }, []); // eslint-disable-line
 
   useTabRefresh('/payouts', () => {
     fetchLedger();
     fetchContacts(true);
     fetchBalance();
+    fetchUnrecordedTxnPayouts();
   });
 
   // Persist failed txn ledger
@@ -764,7 +795,18 @@ const Payouts = () => {
     const selectedProject = projectId ? projects.find(p => p.id === projectId) : null;
     const label  = `Payment to ${contact}`;
     const amt    = parseFloat(amount) || 0;
-    const payload = { phoneNumber: normalizePhone(contact), amount: amt, remarks: description || 'Transaction Payout', description };
+    const payload = {
+      phoneNumber:    normalizePhone(contact),
+      amount:         amt,
+      remarks:        description || 'Transaction Payout',
+      description,
+      // stored server-side so the transaction can be recovered if the browser closes
+      imprestId:      selectedImprest?.id         || null,
+      projectId:      selectedProject?.id         || null,
+      userId:         user.id,
+      imprestName:    selectedImprest?.name        || null,
+      imprestProject: selectedImprest?.projectName || selectedProject?.name || null,
+    };
     setTxnRequesting(true);
     try {
       const { data } = await payoutService.request({ type: 'txn_payout', payload, label, amount: amt, initiatedBy: user.name });
@@ -779,35 +821,6 @@ const Payouts = () => {
     } finally {
       setTxnRequesting(false);
     }
-  };
-
-  const cancelRecord = () => {
-    if (!window.confirm('The payout succeeded. Cancel transaction recording? It will be saved to Action Required for retry.')) return;
-    const m = modal;
-    const payoutAmt = m.amount || 0;
-    const vat = txnForm.vatEnabled ? parseFloat((payoutAmt * VAT_RATE).toFixed(2)) : 0;
-    const total = parseFloat((payoutAmt + vat).toFixed(2));
-    const entry = {
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      payoutLabel: m.label,
-      payoutAmount: payoutAmt,
-      imprestName: m.payload.imprest?.name || 'Expenses',
-      imprestProject: m.payload.imprest?.projectName || null,
-      transactionData: {
-        imprestAccount_id: m.payload.imprest?.id,
-        item: txnForm.item.trim(),
-        itemQuantity: 1,
-        unitPrice: payoutAmt,
-        Total_amount: total,
-        userID: user.id,
-        vat_charged: vat,
-        url_image: null,
-      },
-    };
-    setFailedTxns(prev => [entry, ...prev]);
-    setModal(null);
-    setModalStep('pin');
   };
 
   const handleSaveTxnRecord = async () => {
@@ -855,6 +868,11 @@ const Payouts = () => {
 
     try {
       await transactionService.create(txnData);
+      // Mark server-side record as recorded (best-effort — don't block UI on failure)
+      if (ocid) {
+        payoutService.markTxnRecorded(ocid).catch(() => {});
+        setServerFailedTxns(prev => prev.filter(e => e.originatorConversationId !== ocid));
+      }
       setModal(null);
       setModalStep('pin');
       setTxnPayout({ projectId: '', imprestId: '', contact: '', amount: '', description: '' });
@@ -934,7 +952,12 @@ const Payouts = () => {
 
     try {
       await transactionService.create(txnData);
-      setFailedTxns(prev => prev.filter(f => f.id !== retryEntry.id));
+      if (retryEntry.isServerEntry && retryEntry.originatorConversationId) {
+        payoutService.markTxnRecorded(retryEntry.originatorConversationId).catch(() => {});
+        setServerFailedTxns(prev => prev.filter(e => e.id !== retryEntry.id));
+      } else {
+        setFailedTxns(prev => prev.filter(f => f.id !== retryEntry.id));
+      }
       setRetryEntry(null);
       setRetryImageFile(null);
       setTxnSuccess('Transaction recorded successfully.');
@@ -1080,14 +1103,16 @@ const Payouts = () => {
                 </div>
 
                 {/* ── Action Required ───────────────────────── */}
-                {failedTxns.length > 0 && (
+                {(serverFailedTxns.length > 0 || failedTxns.length > 0) && (() => {
+                  const allFailed = [...serverFailedTxns, ...failedTxns];
+                  return (
                   <div className="po-action-required">
                     <div className="po-ar-header">
                       <span className="po-ar-icon">⚠</span>
                       <strong>Action Required</strong>
-                      <span className="po-ar-count">{failedTxns.length} failed imprest transaction{failedTxns.length > 1 ? 's' : ''}</span>
+                      <span className="po-ar-count">{allFailed.length} unrecorded transaction{allFailed.length > 1 ? 's' : ''}</span>
                     </div>
-                    {failedTxns.map(entry => (
+                    {allFailed.map(entry => (
                       <div key={entry.id} className="po-ar-item">
                         <div className="po-ar-info">
                           <div className="po-ar-label">{entry.payoutLabel}</div>
@@ -1105,7 +1130,8 @@ const Payouts = () => {
                       </div>
                     ))}
                   </div>
-                )}
+                  );
+                })()}
 
                 {history.length === 0 ? (
                   <div className="po-empty">
@@ -2161,13 +2187,11 @@ const Payouts = () => {
                   </div>
 
                   <div className="pin-modal-actions" style={{ marginTop: 20 }}>
-                    <button className="pin-cancel-btn" onClick={cancelRecord} disabled={txnSaving}>
-                      Cancel
-                    </button>
                     <button
                       className="pin-auth-btn"
                       onClick={handleSaveTxnRecord}
                       disabled={txnSaving}
+                      style={{ width: '100%' }}
                     >
                       {txnSaving ? 'Saving…' : 'Save Transaction'}
                     </button>

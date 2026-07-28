@@ -188,6 +188,14 @@ export const payoutService = {
   // Last-known working + utility account balance (from most recent B2C callback)
   getBalance: () =>
     paybillApi.get('/shortcode_3576329/b2c/balance'),
+
+  // txn_payout payments that succeeded but whose imprest transaction was never saved
+  getUnrecordedTxnPayouts: () =>
+    paybillApi.get('/shortcode_3576329/b2c/payments/unrecorded'),
+
+  // Mark a txn_payout as having its imprest transaction recorded
+  markTxnRecorded: (originatorConversationId) =>
+    paybillApi.patch(`/shortcode_3576329/b2c/payments/${originatorConversationId}/txn-recorded`),
 };
 
 // Invoice endpoints
