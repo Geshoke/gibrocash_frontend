@@ -72,6 +72,7 @@ export const imprestService = {
   getAllNames: () => api.get('/imprests/all-names'),
   getAdminSummary: () => api.get('/adminAllImprestSummation'),
   getAdminTotals: () => api.get('/adminSummaries'),
+  updateAmount: (id, amount) => api.patch(`/imprests/${id}/amount`, { amount }),
   assignUser: (imprestId, userId) => api.post(`/imprests/${imprestId}/users`, { userId }),
   removeUser: (imprestId, userId) => api.delete(`/imprests/${imprestId}/users/${userId}`),
   findOrCreateExpenses: (data) => api.post('/imprests/expenses', data),

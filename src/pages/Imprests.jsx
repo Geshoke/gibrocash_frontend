@@ -45,6 +45,8 @@ const Imprests = () => {
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [userActionError, setUserActionError] = useState('');
   const [assigningProject, setAssigningProject] = useState(false);
+  const [allocatedAmountInput, setAllocatedAmountInput] = useState('');
+  const [savingAllocatedAmount, setSavingAllocatedAmount] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -209,6 +211,7 @@ const Imprests = () => {
     setSelectedUserId('');
     setSelectedProjectId('');
     setUserActionError('');
+    setAllocatedAmountInput(String(imprest.amount || ''));
     setLoadingPanel(true);
     try {
       const [usersRes, projectsRes] = await Promise.all([
@@ -229,6 +232,28 @@ const Imprests = () => {
     setSelectedUserId('');
     setSelectedProjectId('');
     setUserActionError('');
+    setAllocatedAmountInput('');
+  };
+
+  const handleUpdateAllocatedAmount = async () => {
+    const newAmount = parseFloat(allocatedAmountInput);
+    if (isNaN(newAmount) || newAmount <= 0) {
+      setUserActionError('Enter a valid positive amount.');
+      return;
+    }
+    setSavingAllocatedAmount(true);
+    setUserActionError('');
+    try {
+      await imprestService.updateAmount(panelImprest.id, newAmount);
+      const updated = { ...panelImprest, amount: newAmount };
+      setPanelImprest(updated);
+      setImprests(prev => prev.map(i => i.id === updated.id ? updated : i));
+      if (selectedImprest?.id === updated.id) setSelectedImprest(updated);
+    } catch (err) {
+      setUserActionError(err.response?.data?.response || 'Failed to update allocated amount.');
+    } finally {
+      setSavingAllocatedAmount(false);
+    }
   };
 
   const handleAssignProject = async () => {
@@ -630,6 +655,30 @@ const Imprests = () => {
               <div className="ip-loading"><div className="spinner"></div></div>
             ) : (
               <div className="ip-body">
+                {/* Allocated Amount Section */}
+                <div className="ip-section">
+                  <p className="ip-section-label">Allocated Amount</p>
+                  <p className="ip-field-label">Current: {formatCurrency(panelImprest.amount)}</p>
+                  <div className="ip-row">
+                    <input
+                      type="number"
+                      className="iu-select"
+                      min="1"
+                      step="0.01"
+                      value={allocatedAmountInput}
+                      onChange={e => setAllocatedAmountInput(e.target.value)}
+                      placeholder="New amount (KES)"
+                    />
+                    <button
+                      className="iu-add-btn"
+                      onClick={handleUpdateAllocatedAmount}
+                      disabled={savingAllocatedAmount || allocatedAmountInput === String(panelImprest.amount)}
+                    >
+                      {savingAllocatedAmount ? '...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+
                 {/* Project Section */}
                 <div className="ip-section">
                   <p className="ip-section-label">Project</p>
