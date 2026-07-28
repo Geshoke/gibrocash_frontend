@@ -886,10 +886,10 @@ const Imprests = () => {
                   <span className="atx-dropzone-main">
                     {addTxnFile ? addTxnFile.name : 'Click to attach a receipt'}
                   </span>
-                  <span className="atx-dropzone-hint">PNG or PDF · optional</span>
+                  <span className="atx-dropzone-hint">PNG, JPG or PDF · optional</span>
                   <input
                     type="file"
-                    accept="image/png,.pdf,application/pdf"
+                    accept="image/png,image/jpeg,.pdf,application/pdf"
                     onChange={e => setAddTxnFile(e.target.files[0] || null)}
                   />
                 </label>

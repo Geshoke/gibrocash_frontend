@@ -875,10 +875,10 @@ const Transactions = () => {
                             <span className="txn-receipt-dz-main">
                               {uploadingReceipt ? 'Uploading…' : 'No receipt — click to upload'}
                             </span>
-                            <span className="txn-receipt-dz-hint">PNG or PDF accepted</span>
+                            <span className="txn-receipt-dz-hint">PNG, JPG or PDF accepted</span>
                             <input
                               type="file"
-                              accept="image/png,.pdf,application/pdf"
+                              accept="image/png,image/jpeg,.pdf,application/pdf"
                               disabled={uploadingReceipt}
                               onChange={e => handleReceiptUpload(e.target.files[0] || null)}
                             />
