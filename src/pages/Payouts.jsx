@@ -288,8 +288,10 @@ const Payouts = () => {
         imprestProject: p.payoutMeta?.imprestProject || null,
         isServerEntry: true,
         originatorConversationId: p.originatorConversationId,
+        financeTransactionId: p.payoutMeta?.financeTransactionId || null,
         transactionData: {
           imprestAccount_id: p.payoutMeta?.imprestId   || null,
+          projectId:         p.payoutMeta?.projectId   || null,
           item:              p.payoutMeta?.description || '',
           itemQuantity:      1,
           unitPrice:         parseFloat(p.amount),
@@ -867,9 +869,11 @@ const Payouts = () => {
     };
 
     try {
-      await transactionService.create(txnData);
-      // Mark server-side record as recorded (best-effort — don't block UI on failure)
+      const { data: createdTxn } = await transactionService.create(txnData);
+      // Best-effort — don't block UI on failure. Link first so that if markTxnRecorded
+      // itself fails, a later retry can attach a receipt instead of creating a duplicate.
       if (ocid) {
+        payoutService.setFinanceTransaction(ocid, createdTxn.transaction.id).catch(() => {});
         payoutService.markTxnRecorded(ocid).catch(() => {});
         setServerFailedTxns(prev => prev.filter(e => e.originatorConversationId !== ocid));
       }
@@ -924,6 +928,38 @@ const Payouts = () => {
     setRetrying(true);
     setRetryError('');
 
+    // Transaction was already created (we just failed to confirm that server-side, or the
+    // receipt was never attached) — update it and attach the receipt, don't create a duplicate.
+    if (retryEntry.financeTransactionId) {
+      try {
+        await transactionService.update(retryEntry.financeTransactionId, {
+          item:        item.trim(),
+          quantity:    parseFloat(quantity),
+          unitPrice:   parseFloat(unitPrice),
+          vat_charged: vat,
+          price:       total,
+        });
+        if (retryImageFile) {
+          const fd = new FormData();
+          fd.append('file', retryImageFile);
+          await transactionService.uploadReceipt(retryEntry.financeTransactionId, fd);
+        }
+        if (retryEntry.originatorConversationId) {
+          payoutService.markTxnRecorded(retryEntry.originatorConversationId).catch(() => {});
+        }
+        setServerFailedTxns(prev => prev.filter(e => e.id !== retryEntry.id));
+        setRetryEntry(null);
+        setRetryImageFile(null);
+        setTxnSuccess('Transaction recorded successfully.');
+        setTimeout(() => setTxnSuccess(''), 6000);
+      } catch {
+        setRetryError('Transaction recording failed. Please try again.');
+      } finally {
+        setRetrying(false);
+      }
+      return;
+    }
+
     let imageFilename = existingUrl || null;
 
     if (!imageFilename) {
@@ -939,8 +975,33 @@ const Payouts = () => {
       }
     }
 
+    let imprestAccountId = retryEntry.transactionData.imprestAccount_id;
+
+    // Payout was made against a project rather than a specific imprest —
+    // resolve (or create) its Expenses imprest, same as the live record flow.
+    if (!imprestAccountId && retryEntry.transactionData.projectId) {
+      try {
+        const { data } = await imprestService.findOrCreateExpenses({
+          project_id: retryEntry.transactionData.projectId,
+          amount:     retryEntry.payoutAmount,
+          createdBy:  retryEntry.transactionData.userID,
+        });
+        imprestAccountId = data.imprest.id;
+      } catch {
+        setRetryError('Could not resolve the project expense account. Please try again.');
+        setRetrying(false);
+        return;
+      }
+    }
+
+    if (!imprestAccountId) {
+      setRetryError('No imprest or project associated with this payout — cannot record.');
+      setRetrying(false);
+      return;
+    }
+
     let txnData = {
-      imprestAccount_id: retryEntry.transactionData.imprestAccount_id,
+      imprestAccount_id: imprestAccountId,
       item:              item.trim(),
       itemQuantity:      parseFloat(quantity),
       unitPrice:         parseFloat(unitPrice),

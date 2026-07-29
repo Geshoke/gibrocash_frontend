@@ -95,14 +95,14 @@ export const transactionService = {
     }),
   getByImprest: (imprestID) => api.get(`/imprestAccount_trnsctns/${imprestID}`),
   createForImprest: (imprestId, formData) => api.post(`/imprests/${imprestId}/transactions`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined },
   }),
   delete: (transactionID) => api.delete(`/create_transaction/${transactionID}`),
   update: (id, data) => api.patch(`/transactions/${id}`, data),
   move: (id, imprest_id) => api.patch(`/transactions/${id}/move`, { imprest_id }),
   split: (id, parts) => api.post(`/transactions/${id}/split`, { parts }),
   uploadReceipt: (id, formData) => api.patch(`/transactions/${id}/receipt`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined },
   }),
 };
 
@@ -139,10 +139,10 @@ export const projectService = {
 // Image endpoints
 export const imageService = {
   upload: (formData) => api.post('/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined },
   }),
   uploadToImprest: (formData) => api.post('/upload_fromImprest', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined },
   }),
   getImprestImages: (imprestID) => api.get(`/requestImage/${imprestID}`),
   getImageCount: (imprestID) => api.get(`/getImprestImagesCount/${imprestID}`),
@@ -197,6 +197,11 @@ export const payoutService = {
   // Mark a txn_payout as having its imprest transaction recorded
   markTxnRecorded: (originatorConversationId) =>
     paybillApi.patch(`/shortcode_3576329/b2c/payments/${originatorConversationId}/txn-recorded`),
+
+  // Link a txn_payout to the GibroCash transaction created for it, so a retry (e.g. if
+  // markTxnRecorded itself fails) can attach a receipt instead of creating a duplicate
+  setFinanceTransaction: (originatorConversationId, transactionId) =>
+    paybillApi.patch(`/shortcode_3576329/b2c/payments/${originatorConversationId}/finance-transaction`, { transactionId }),
 };
 
 // Invoice endpoints
