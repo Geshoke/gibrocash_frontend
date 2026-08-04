@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { proposalService, userService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTabRefresh } from '../hooks/useTabRefresh';
@@ -32,6 +32,22 @@ const Proposals = () => {
     fetchProposals(1, emptyFilters);
     if (admin) fetchUsers();
   }, []);
+
+  // Live search: typing in the Name/Item fields filters the list automatically,
+  // debounced so we don't hit the API on every keystroke.
+  const skipNextDebounce = useRef(true);
+  useEffect(() => {
+    if (skipNextDebounce.current) {
+      skipNextDebounce.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      setAppliedFilters(filterInputs);
+      setSelectedProposal(null);
+      fetchProposals(1, filterInputs, true);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [filterInputs.name, filterInputs.item]);
 
   useTabRefresh('/proposals', () => {
     fetchProposals(page, appliedFilters, true);
@@ -74,12 +90,14 @@ const Proposals = () => {
   };
 
   const handleApplyFilters = () => {
+    skipNextDebounce.current = true;
     setAppliedFilters(filterInputs);
     setSelectedProposal(null);
     fetchProposals(1, filterInputs);
   };
 
   const handleClearFilters = () => {
+    skipNextDebounce.current = true;
     setFilterInputs(emptyFilters);
     setAppliedFilters(emptyFilters);
     setSelectedProposal(null);
