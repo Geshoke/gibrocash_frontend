@@ -49,6 +49,7 @@ export const AuthProvider = ({ children }) => {
       create_transactions: profile?.create_transactions ?? false,
       edit_contacts: profile?.edit_contacts ?? false,
       manage_projects: profile?.manage_projects ?? false,
+      manage_supplier_invoices: profile?.manage_supplier_invoices ?? false,
     };
 
     localStorage.setItem('user', JSON.stringify(userObj));
@@ -107,6 +108,10 @@ export const AuthProvider = ({ children }) => {
     return user?.manage_projects === true;
   };
 
+  const canManageSupplierInvoices = () => {
+    return user?.manage_supplier_invoices === true;
+  };
+
   const value = {
     user,
     login,
@@ -122,6 +127,7 @@ export const AuthProvider = ({ children }) => {
     canCreateTransactions,
     canEditContacts,
     canManageProjects,
+    canManageSupplierInvoices,
     isAuthenticated: !!user,
     loading,
   };

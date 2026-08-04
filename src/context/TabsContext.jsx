@@ -19,6 +19,7 @@ export const NAV_ITEMS = [
   { path: '/transactions', label: 'Transactions', icon: '📝' },
   { path: '/proposals', label: 'Proposals', icon: '📋' },
   { path: '/invoices', label: 'Invoices', icon: '🧾', requires: 'invoice' },
+  { path: '/supplier-invoices', label: 'Supplier Invoices', icon: '📑' },
   { path: '/payouts', label: 'Payouts', icon: '💸', requires: 'payout' },
   { path: '/users', label: 'Users', icon: '👥', requires: 'admin' },
   { path: '/settings', label: 'Settings', icon: '⚙️' },
