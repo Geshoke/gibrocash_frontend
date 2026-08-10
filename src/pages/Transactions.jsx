@@ -33,6 +33,7 @@ const Transactions = () => {
 
   // ── Edit ──────────────────────────────────────────────────────
   const [editMode, setEditMode]     = useState(false);
+  const [editTab, setEditTab]       = useState('details'); // 'details' | 'move'
   const [editForm, setEditForm]     = useState({ item: '', quantity: '', unitPrice: '', vat_charged: '' });
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError]   = useState('');
@@ -46,6 +47,9 @@ const Transactions = () => {
   // ── Move to imprest ───────────────────────────────────────────
   const [allImprests, setAllImprests]           = useState([]);
   const [allProjects, setAllProjects]           = useState([]);
+  // { [imprestId]: { allocated, usedAmount } } — admin-only financial detail,
+  // never fetched for users without canViewAllImprests() (see openEdit).
+  const [imprestSummaries, setImprestSummaries] = useState({});
   const [moveProjectId, setMoveProjectId]       = useState('');
   const [moveProjectSearch, setMoveProjectSearch] = useState('');
   const [moveProjectDropdownOpen, setMoveProjectDropdownOpen] = useState(false);
@@ -285,6 +289,7 @@ const Transactions = () => {
     setMoveProjectId('');
     setMoveProjectSearch('');
     setMoveProjectDropdownOpen(false);
+    setEditTab('details');
     setEditMode(true);
     if (canMoveTransactions()) {
       try {
@@ -296,6 +301,18 @@ const Transactions = () => {
           projectService.getAll().then(r => {
             const data = r.data?.projects;
             setAllProjects(Array.isArray(data) ? data : []);
+          })
+        );
+        // Financial detail (allocated/used) is admin-only server-side. Only users with
+        // canViewAllImprests() may call it — for anyone else this would 403, and the
+        // response interceptor logs out on any 403, so it must never be attempted otherwise.
+        if (canViewAllImprests() && Object.keys(imprestSummaries).length === 0) fetches.push(
+          imprestService.getAdminSummary().then(r => {
+            const map = {};
+            (r.data?.response || []).forEach(imp => {
+              map[imp.id] = { allocated: imp.allocated, usedAmount: imp.usedAmount };
+            });
+            setImprestSummaries(map);
           })
         );
         if (fetches.length > 0) await Promise.all(fetches);
@@ -433,6 +450,16 @@ const Transactions = () => {
 
   const formatCurrency = (amount) =>
     new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount || 0);
+
+  // null = imprest not found/loaded yet; undefined = user's role can't see this data at all.
+  const getImprestFinancials = (imprestId) => {
+    if (!canViewAllImprests()) return undefined;
+    const s = imprestId && imprestSummaries[imprestId];
+    if (!s) return null;
+    const allocated = parseFloat(s.allocated) || 0;
+    const used       = parseFloat(s.usedAmount) || 0;
+    return { allocated, used, balance: allocated - used };
+  };
 
   const formatDate = (dateString) =>
     new Date(dateString).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -638,157 +665,237 @@ const Transactions = () => {
                 <div className="txn-detail-body">
                   {editMode ? (
                     <div className="txn-edit-form">
-                      <div className="txn-detail-field">
-                        <span className="txn-detail-label">Item / Description</span>
-                        <input className="txn-edit-input" type="text" value={editForm.item}
-                          onChange={e => setEditForm(p => ({ ...p, item: e.target.value }))} />
-                      </div>
-                      <div className="txn-detail-field">
-                        <span className="txn-detail-label">Quantity</span>
-                        <input className="txn-edit-input" type="number" min="1" step="1" value={editForm.quantity}
-                          onChange={e => setEditForm(p => ({ ...p, quantity: e.target.value }))} />
-                      </div>
-                      <div className="txn-detail-field">
-                        <span className="txn-detail-label">Unit Price (KES)</span>
-                        <input className="txn-edit-input" type="number" min="0" step="0.01" value={editForm.unitPrice}
-                          onChange={e => setEditForm(p => ({ ...p, unitPrice: e.target.value }))} />
-                      </div>
-                      <div className="txn-detail-field">
-                        <span className="txn-detail-label">VAT (KES)</span>
-                        <input className="txn-edit-input" type="number" min="0" step="0.01" value={editForm.vat_charged}
-                          onChange={e => setEditForm(p => ({ ...p, vat_charged: e.target.value }))} />
-                      </div>
-                      {editError && <p className="txn-edit-error">{editError}</p>}
-                      <div className="txn-edit-actions">
-                        <button className="txn-edit-cancel-btn" onClick={cancelEdit} disabled={editSaving}>Cancel</button>
-                        <button className="txn-edit-save-btn" onClick={saveEdit} disabled={editSaving}>
-                          {editSaving ? 'Saving…' : 'Save Changes'}
+                      <div className="txn-edit-tabs">
+                        <button
+                          className={`txn-edit-tab${editTab === 'details' ? ' active' : ''}`}
+                          onClick={() => setEditTab('details')}
+                        >
+                          Transaction Details
                         </button>
+                        {canMoveTransactions() && (
+                          <button
+                            className={`txn-edit-tab${editTab === 'move' ? ' active' : ''}`}
+                            onClick={() => setEditTab('move')}
+                          >
+                            Move Transaction
+                          </button>
+                        )}
                       </div>
 
-                      {canMoveTransactions() && (
-                        <div className="txn-move-section">
-                          <span className="txn-detail-label">Move to Imprest</span>
-
-                          {/* Step 1 — project filter */}
-                          <div className="txn-move-combo" ref={moveProjectComboRef}>
-                            <input
-                              className="txn-edit-input txn-move-search"
-                              type="text"
-                              placeholder="Filter by project (optional)…"
-                              value={moveProjectSearch}
-                              onFocus={() => setMoveProjectDropdownOpen(true)}
-                              onChange={e => {
-                                setMoveProjectSearch(e.target.value);
-                                setMoveProjectId('');
-                                setMoveProjectDropdownOpen(true);
-                                setMoveImprestId('');
-                                setMoveSearch('');
-                                setMoveError('');
-                                setMoveSuccess('');
-                              }}
-                            />
-                            {moveProjectDropdownOpen && (
-                              <div className="txn-move-dropdown">
-                                <button
-                                  className={`txn-move-dropdown-item${!moveProjectId ? ' selected' : ''}`}
-                                  onMouseDown={e => {
-                                    e.preventDefault();
-                                    setMoveProjectId('');
-                                    setMoveProjectSearch('');
-                                    setMoveProjectDropdownOpen(false);
-                                    setMoveImprestId('');
-                                    setMoveSearch('');
-                                  }}
-                                >
-                                  All projects
-                                </button>
-                                {allProjects
-                                  .filter(p => p.name.toLowerCase().includes(moveProjectSearch.toLowerCase()))
-                                  .map(p => (
-                                    <button
-                                      key={p.id}
-                                      className={`txn-move-dropdown-item${moveProjectId === p.id ? ' selected' : ''}`}
-                                      onMouseDown={e => {
-                                        e.preventDefault();
-                                        setMoveProjectId(p.id);
-                                        setMoveProjectSearch(p.name);
-                                        setMoveProjectDropdownOpen(false);
-                                        setMoveImprestId('');
-                                        setMoveSearch('');
-                                        setMoveError('');
-                                        setMoveSuccess('');
-                                      }}
-                                    >
-                                      {p.name}
-                                    </button>
-                                  ))
-                                }
-                                {allProjects.filter(p => p.name.toLowerCase().includes(moveProjectSearch.toLowerCase())).length === 0 && (
-                                  <span className="txn-move-dropdown-empty">No projects match</span>
-                                )}
-                              </div>
-                            )}
+                      {editTab === 'details' && (
+                        <>
+                          <div className="txn-detail-field">
+                            <span className="txn-detail-label">Item / Description</span>
+                            <input className="txn-edit-input" type="text" value={editForm.item}
+                              onChange={e => setEditForm(p => ({ ...p, item: e.target.value }))} />
                           </div>
-
-                          {/* Step 2 — imprest (filtered by selected project) */}
-                          <div className="txn-move-row">
-                            <div className="txn-move-combo" ref={moveComboRef}>
-                              <input
-                                className="txn-edit-input txn-move-search"
-                                type="text"
-                                placeholder="Search imprest…"
-                                value={moveSearch}
-                                onFocus={() => setMoveDropdownOpen(true)}
-                                onChange={e => {
-                                  setMoveSearch(e.target.value);
-                                  setMoveImprestId('');
-                                  setMoveDropdownOpen(true);
-                                  setMoveError('');
-                                  setMoveSuccess('');
-                                }}
-                              />
-                              {moveDropdownOpen && (
-                                <div className="txn-move-dropdown">
-                                  {filteredImprests.filter(i =>
-                                    i.name.toLowerCase().includes(moveSearch.toLowerCase())
-                                  ).length === 0 ? (
-                                    <span className="txn-move-dropdown-empty">No imprests match</span>
-                                  ) : (
-                                    filteredImprests
-                                      .filter(i => i.name.toLowerCase().includes(moveSearch.toLowerCase()))
-                                      .map(i => (
-                                        <button
-                                          key={i.id}
-                                          className={`txn-move-dropdown-item${moveImprestId === i.id ? ' selected' : ''}`}
-                                          onMouseDown={e => {
-                                            e.preventDefault();
-                                            setMoveImprestId(i.id);
-                                            setMoveSearch(i.name);
-                                            setMoveDropdownOpen(false);
-                                            setMoveError('');
-                                            setMoveSuccess('');
-                                          }}
-                                        >
-                                          <span>{i.name}</span>
-                                          {i.project?.name && (
-                                            <span className="txn-move-imprest-project">{i.project.name}</span>
-                                          )}
-                                        </button>
-                                      ))
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <button className="txn-move-btn" onClick={moveTransaction} disabled={moveSaving || !moveImprestId}>
-                              {moveSaving ? 'Moving…' : 'Move'}
+                          <div className="txn-detail-field">
+                            <span className="txn-detail-label">Quantity</span>
+                            <input className="txn-edit-input" type="number" min="1" step="1" value={editForm.quantity}
+                              onChange={e => setEditForm(p => ({ ...p, quantity: e.target.value }))} />
+                          </div>
+                          <div className="txn-detail-field">
+                            <span className="txn-detail-label">Unit Price (KES)</span>
+                            <input className="txn-edit-input" type="number" min="0" step="0.01" value={editForm.unitPrice}
+                              onChange={e => setEditForm(p => ({ ...p, unitPrice: e.target.value }))} />
+                          </div>
+                          <div className="txn-detail-field">
+                            <span className="txn-detail-label">VAT (KES)</span>
+                            <input className="txn-edit-input" type="number" min="0" step="0.01" value={editForm.vat_charged}
+                              onChange={e => setEditForm(p => ({ ...p, vat_charged: e.target.value }))} />
+                          </div>
+                          {editError && <p className="txn-edit-error">{editError}</p>}
+                          <div className="txn-edit-actions">
+                            <button className="txn-edit-cancel-btn" onClick={cancelEdit} disabled={editSaving}>Cancel</button>
+                            <button className="txn-edit-save-btn" onClick={saveEdit} disabled={editSaving}>
+                              {editSaving ? 'Saving…' : 'Save Changes'}
                             </button>
                           </div>
-
-                          {moveError   && <p className="txn-edit-error">{moveError}</p>}
-                          {moveSuccess && <p className="txn-move-success">{moveSuccess}</p>}
-                        </div>
+                        </>
                       )}
+
+                      {editTab === 'move' && canMoveTransactions() && (() => {
+                        const currentFin  = getImprestFinancials(selectedTransaction.imprest_id);
+                        const destImprest = allImprests.find(i => i.id === moveImprestId);
+                        const destFin     = getImprestFinancials(moveImprestId);
+                        const renderFinancials = (fin) => {
+                          if (fin === undefined) {
+                            return <p className="txn-move-fin-note">Balance details aren't available for your role.</p>;
+                          }
+                          if (fin === null) {
+                            return <p className="txn-move-fin-note">Balance unavailable.</p>;
+                          }
+                          return (
+                            <div className="txn-move-financials">
+                              <div className="txn-move-fin-row">
+                                <span>Allocated</span><span>{formatCurrency(fin.allocated)}</span>
+                              </div>
+                              <div className="txn-move-fin-row">
+                                <span>Used</span><span>{formatCurrency(fin.used)}</span>
+                              </div>
+                              <div className="txn-move-fin-row balance">
+                                <span>Balance</span><span>{formatCurrency(fin.balance)}</span>
+                              </div>
+                            </div>
+                          );
+                        };
+
+                        return (
+                          <div className="txn-move-section">
+                            <div className="txn-move-columns">
+                              <div className="txn-move-col">
+                                <span className="txn-detail-label">Current</span>
+                                <div className="txn-move-card">
+                                  <div className="txn-move-card-name">{selectedTransaction.imprest?.name || '—'}</div>
+                                  <div className="txn-move-card-project">{selectedTransaction.imprest?.project?.name || '—'}</div>
+                                  {renderFinancials(currentFin)}
+                                </div>
+                              </div>
+
+                              <div className="txn-move-arrow-col">
+                                <span className="txn-move-arrow-label">
+                                  {selectedTransaction.item} · {formatCurrency(selectedTransaction.price)}
+                                </span>
+                                <button
+                                  className="txn-move-arrow-btn"
+                                  onClick={moveTransaction}
+                                  disabled={moveSaving || !moveImprestId}
+                                  title={moveImprestId ? 'Move this transaction' : 'Select a destination imprest first'}
+                                >
+                                  {moveSaving ? <span className="txn-move-arrow-spinner" /> : <span className="txn-move-arrow-icon">→</span>}
+                                </button>
+                              </div>
+
+                              <div className="txn-move-col">
+                                <span className="txn-detail-label">Move to</span>
+
+                                {/* Step 1 — project filter */}
+                                <div className="txn-move-combo" ref={moveProjectComboRef}>
+                                  <input
+                                    className="txn-edit-input txn-move-search"
+                                    type="text"
+                                    placeholder="Filter by project (optional)…"
+                                    value={moveProjectSearch}
+                                    onFocus={() => setMoveProjectDropdownOpen(true)}
+                                    onChange={e => {
+                                      setMoveProjectSearch(e.target.value);
+                                      setMoveProjectId('');
+                                      setMoveProjectDropdownOpen(true);
+                                      setMoveImprestId('');
+                                      setMoveSearch('');
+                                      setMoveError('');
+                                      setMoveSuccess('');
+                                    }}
+                                  />
+                                  {moveProjectDropdownOpen && (
+                                    <div className="txn-move-dropdown">
+                                      <button
+                                        className={`txn-move-dropdown-item${!moveProjectId ? ' selected' : ''}`}
+                                        onMouseDown={e => {
+                                          e.preventDefault();
+                                          setMoveProjectId('');
+                                          setMoveProjectSearch('');
+                                          setMoveProjectDropdownOpen(false);
+                                          setMoveImprestId('');
+                                          setMoveSearch('');
+                                        }}
+                                      >
+                                        All projects
+                                      </button>
+                                      {allProjects
+                                        .filter(p => p.name.toLowerCase().includes(moveProjectSearch.toLowerCase()))
+                                        .map(p => (
+                                          <button
+                                            key={p.id}
+                                            className={`txn-move-dropdown-item${moveProjectId === p.id ? ' selected' : ''}`}
+                                            onMouseDown={e => {
+                                              e.preventDefault();
+                                              setMoveProjectId(p.id);
+                                              setMoveProjectSearch(p.name);
+                                              setMoveProjectDropdownOpen(false);
+                                              setMoveImprestId('');
+                                              setMoveSearch('');
+                                              setMoveError('');
+                                              setMoveSuccess('');
+                                            }}
+                                          >
+                                            {p.name}
+                                          </button>
+                                        ))
+                                      }
+                                      {allProjects.filter(p => p.name.toLowerCase().includes(moveProjectSearch.toLowerCase())).length === 0 && (
+                                        <span className="txn-move-dropdown-empty">No projects match</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Step 2 — imprest (filtered by selected project) */}
+                                <div className="txn-move-combo" ref={moveComboRef}>
+                                  <input
+                                    className="txn-edit-input txn-move-search"
+                                    type="text"
+                                    placeholder="Search imprest…"
+                                    value={moveSearch}
+                                    onFocus={() => setMoveDropdownOpen(true)}
+                                    onChange={e => {
+                                      setMoveSearch(e.target.value);
+                                      setMoveImprestId('');
+                                      setMoveDropdownOpen(true);
+                                      setMoveError('');
+                                      setMoveSuccess('');
+                                    }}
+                                  />
+                                  {moveDropdownOpen && (
+                                    <div className="txn-move-dropdown">
+                                      {filteredImprests.filter(i =>
+                                        i.name.toLowerCase().includes(moveSearch.toLowerCase())
+                                      ).length === 0 ? (
+                                        <span className="txn-move-dropdown-empty">No imprests match</span>
+                                      ) : (
+                                        filteredImprests
+                                          .filter(i => i.name.toLowerCase().includes(moveSearch.toLowerCase()))
+                                          .map(i => (
+                                            <button
+                                              key={i.id}
+                                              className={`txn-move-dropdown-item${moveImprestId === i.id ? ' selected' : ''}`}
+                                              onMouseDown={e => {
+                                                e.preventDefault();
+                                                setMoveImprestId(i.id);
+                                                setMoveSearch(i.name);
+                                                setMoveDropdownOpen(false);
+                                                setMoveError('');
+                                                setMoveSuccess('');
+                                              }}
+                                            >
+                                              <span>{i.name}</span>
+                                              {i.project?.name && (
+                                                <span className="txn-move-imprest-project">{i.project.name}</span>
+                                              )}
+                                            </button>
+                                          ))
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {moveImprestId ? (
+                                  <div className="txn-move-card">
+                                    <div className="txn-move-card-name">{destImprest?.name || moveSearch}</div>
+                                    <div className="txn-move-card-project">{destImprest?.project?.name || '—'}</div>
+                                    {renderFinancials(destFin)}
+                                  </div>
+                                ) : (
+                                  <div className="txn-move-card empty">Select an imprest to preview its balance</div>
+                                )}
+
+                                {moveError   && <p className="txn-edit-error">{moveError}</p>}
+                                {moveSuccess && <p className="txn-move-success">{moveSuccess}</p>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <div className="txn-detail-grid">

@@ -677,6 +677,30 @@
 
 .txn-edit-form { display: flex; flex-direction: column; gap: 14px; }
 
+.txn-edit-tabs {
+  display: flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.txn-edit-tab {
+  padding: 7px 18px;
+  border: none;
+  background: none;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.txn-edit-tab.active {
+  background: #3182ce;
+  color: #fff;
+  font-weight: 600;
+}
+
 .txn-edit-input {
   width: 100%;
   padding: 7px 10px;
@@ -726,17 +750,9 @@
 
 /* ── Move to imprest ──────────────────────────────────────────── */
 .txn-move-section {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-color, #e2e8f0);
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-.txn-move-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
 }
 .txn-move-combo {
   position: relative;
@@ -775,25 +791,125 @@
   font-size: 0.82rem;
   color: var(--text-muted, #718096);
 }
-.txn-move-btn {
-  padding: 8px 16px;
-  background: #38a169;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
-  flex-shrink: 0;
-}
-.txn-move-btn:hover { background: #2f855a; }
-.txn-move-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .txn-move-success {
   font-size: 0.8rem;
   color: #2f855a;
   margin: 0;
+}
+
+.txn-move-columns {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.txn-move-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.txn-move-arrow-col {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 22px;
+  width: 90px;
+}
+.txn-move-arrow-label {
+  font-size: 0.72rem;
+  color: var(--text-muted, #718096);
+  text-align: center;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.txn-move-arrow-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: none;
+  background: #3182ce;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+}
+.txn-move-arrow-btn:hover:not(:disabled) { background: #2b6cb0; }
+.txn-move-arrow-btn:disabled { background: #cbd5e0; cursor: not-allowed; }
+.txn-move-arrow-icon { font-size: 1.4rem; line-height: 1; }
+.txn-move-arrow-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@media (max-width: 720px) {
+  .txn-move-columns { flex-direction: column; }
+  .txn-move-arrow-col { width: auto; padding-top: 0; flex-direction: row-reverse; justify-content: center; }
+  .txn-move-arrow-btn { transform: rotate(90deg); }
+}
+
+.txn-move-card {
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--card-bg, #fff);
+}
+.txn-move-card.empty {
+  color: var(--text-muted, #718096);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 20px 14px;
+}
+.txn-move-card-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary, #1a202c);
+}
+.txn-move-card-project {
+  font-size: 0.8rem;
+  color: var(--text-muted, #718096);
+  margin-bottom: 10px;
+}
+
+.txn-move-financials {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+}
+.txn-move-fin-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #4a5568);
+}
+.txn-move-fin-row.balance {
+  font-weight: 600;
+  color: var(--text-primary, #1a202c);
+  font-size: 0.88rem;
+}
+.txn-move-fin-note {
+  font-size: 0.78rem;
+  color: var(--text-muted, #718096);
+  font-style: italic;
+  margin: 10px 0 0;
 }
 
 /* ── Receipt upload drop zone ─────────────────────────────────── */
