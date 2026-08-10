@@ -180,7 +180,9 @@ const Payouts = () => {
   // ── B2C polling ───────────────────────────────────────────────
   const [ocid, setOcid]               = useState(null);
   const [pollingError, setPollingError] = useState('');
+  const [showPollEscape, setShowPollEscape] = useState(false);
   const pollRef                         = useRef(null);
+  const pollEscapeTimerRef              = useRef(null);
 
   // ── Account balance (last-known from B2C callbacks) ──────────
   const [balance, setBalance] = useState({ workingAccountFunds: null, utilityAccountFunds: null, asOf: null });
@@ -406,6 +408,9 @@ const Payouts = () => {
   useEffect(() => {
     if (modalStep !== 'polling' || !ocid) return;
 
+    setShowPollEscape(false);
+    pollEscapeTimerRef.current = setTimeout(() => setShowPollEscape(true), 60000);
+
     const resolveImprestAndProceed = async () => {
       const m = modalRef.current;
 
@@ -523,7 +528,10 @@ const Payouts = () => {
       } catch { /* network blip — keep polling */ }
     }, 3000);
 
-    return () => clearInterval(pollRef.current);
+    return () => {
+      clearInterval(pollRef.current);
+      clearTimeout(pollEscapeTimerRef.current);
+    };
   }, [modalStep, ocid]); // eslint-disable-line
 
   useEffect(() => {
@@ -558,6 +566,23 @@ const Payouts = () => {
     clearInterval(timerRef.current);
     setModal(null); setPin('');
     fetchLedger();
+  };
+
+  // Dismiss the "waiting on Safaricom" modal without losing track of the payout.
+  // The PIN has already been authorised — money may already be moving — so this
+  // does not cancel anything server-side. It just stops the client-side poll and
+  // relies on the server-tracked unrecorded-payouts list to surface the result
+  // (same recovery path used when the browser closes mid-flow).
+  const escapePolling = () => {
+    clearInterval(pollRef.current);
+    clearTimeout(pollEscapeTimerRef.current);
+    setModal(null);
+    setModalStep('pin');
+    setOcid(null);
+    setPollingError('');
+    setShowPollEscape(false);
+    fetchLedger();
+    fetchUnrecordedTxnPayouts();
   };
 
   const submitPin = async () => {
@@ -2103,12 +2128,11 @@ const Payouts = () => {
       </div>
 
       {/* ── PIN Modal ───────────────────────────────────────── */}
+      {/* No outside-click-to-close: this app is used on field tablets, where an
+          accidental screen touch could otherwise drop an in-flight payout. Every
+          step has its own explicit Cancel/Close/Save button instead. */}
       {modal && (
-        <div className="pin-overlay" onClick={e => {
-          if (e.target !== e.currentTarget) return;
-          if (modalStep === 'record') return; // must use Cancel or Save buttons
-          if (!pinExpired) cancelModal();
-        }}>
+        <div className="pin-overlay">
           <div className={`pin-modal${modalStep === 'record' ? ' wide' : ''}`}>
             <div className="pin-modal-head">
               <div className="pin-lock-icon">
@@ -2158,6 +2182,18 @@ const Payouts = () => {
                       <span className="psr-val">{modal?.payload?.contact}</span>
                     </div>
                   </div>
+                  {showPollEscape && (
+                    <div className="pin-poll-escape" style={{ marginTop: 16 }}>
+                      <p className="pin-desc" style={{ marginBottom: 8 }}>
+                        This is taking longer than usual. The payment is still being confirmed by Safaricom
+                        — closing now won't stop it. You can check its status later under History or
+                        Action Required.
+                      </p>
+                      <button className="pin-cancel-btn" onClick={escapePolling}>
+                        Close and check later
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -2325,7 +2361,7 @@ const Payouts = () => {
       )}
       {/* ── Retry Modal (Action Required) ──────────────────── */}
       {retryEntry && (
-        <div className="pin-overlay" onClick={e => e.target === e.currentTarget && !retrying && setRetryEntry(null)}>
+        <div className="pin-overlay">
           <div className="pin-modal wide">
             <div className="pin-modal-head">
               <div className="pin-lock-icon">🔄</div>
