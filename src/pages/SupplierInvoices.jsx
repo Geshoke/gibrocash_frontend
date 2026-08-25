@@ -4,13 +4,22 @@ import { useAuth } from '../context/AuthContext';
 import { useTabRefresh } from '../hooks/useTabRefresh';
 import './SupplierInvoices.css';
 
-const PAGE_LIMIT = 10;
+const LIMIT_OPTIONS = [10, 25, 50, 100];
 
 const emptyForm = { id: null, proposal_id: '', supplier_name: '', amount: '', invoice_number: '', notes: '', file: null };
 
+const emptySummary = {
+  paid: { count: 0, total: 0 },
+  partial: { count: 0, total: 0, totalPaid: 0 },
+  unpaid: { count: 0, total: 0 },
+};
+
+const STATUS_LABELS = { paid: 'Paid', partial: 'Partial', unpaid: 'Unpaid' };
+
 const SupplierInvoices = () => {
-  const { user, canManageSupplierInvoices } = useAuth();
+  const { user, canManageSupplierInvoices, canViewSupplierInvoices } = useAuth();
   const canManage = canManageSupplierInvoices();
+  const canView = canViewSupplierInvoices();
 
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,6 +27,8 @@ const SupplierInvoices = () => {
   const [filters, setFilters] = useState({ status: '', search: '', dateFrom: '', dateTo: '' });
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [limit, setLimit] = useState(LIMIT_OPTIONS[0]);
+  const [summary, setSummary] = useState(emptySummary);
 
   const [proposals, setProposals] = useState([]);
   const [proposalsLoaded, setProposalsLoaded] = useState(false);
@@ -41,16 +52,29 @@ const SupplierInvoices = () => {
   }, []);
 
   useEffect(() => {
+    if (!canView) {
+      setLoading(false);
+      return;
+    }
     fetchInvoices(1, filters);
-  }, [filters]);
+  }, [filters, limit, canView]);
 
-  useTabRefresh('/supplier-invoices', () => fetchInvoices(page, filters, true));
+  useEffect(() => {
+    if (!canView) return;
+    fetchSummary(filters);
+  }, [filters.search, filters.dateFrom, filters.dateTo, canView]);
+
+  useTabRefresh('/supplier-invoices', () => {
+    if (!canView) return;
+    fetchInvoices(page, filters, true);
+    fetchSummary(filters);
+  });
 
   const fetchInvoices = async (targetPage, filterState, silent = false) => {
     try {
       if (!silent) setLoading(true);
       setError('');
-      const params = { page: targetPage, limit: PAGE_LIMIT };
+      const params = { page: targetPage, limit };
       if (filterState.status) params.status = filterState.status;
       if (filterState.search) params.supplier_name = filterState.search;
       if (filterState.dateFrom) params.dateFrom = filterState.dateFrom;
@@ -66,6 +90,28 @@ const SupplierInvoices = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchSummary = async (filterState) => {
+    try {
+      const params = {};
+      if (filterState.search) params.supplier_name = filterState.search;
+      if (filterState.dateFrom) params.dateFrom = filterState.dateFrom;
+      if (filterState.dateTo) params.dateTo = filterState.dateTo;
+
+      const res = await supplierInvoiceService.getSummary(params);
+      setSummary(res.data.summary || emptySummary);
+    } catch (err) {
+      console.error('Failed to load supplier invoice summary:', err);
+    }
+  };
+
+  const handleSummaryClick = (status) => {
+    setFilters(f => ({ ...f, status: f.status === status ? '' : status }));
+  };
+
+  const handleLimitChange = (e) => {
+    setLimit(Number(e.target.value));
   };
 
   const loadProposals = async () => {
@@ -183,6 +229,7 @@ const SupplierInvoices = () => {
       }
       closeModal();
       fetchInvoices(modalMode === 'create' ? 1 : page, filters, true);
+      fetchSummary(filters);
     } catch (err) {
       setFormError(err.response?.data?.response || 'Failed to save supplier invoice.');
       console.error(err);
@@ -191,15 +238,40 @@ const SupplierInvoices = () => {
     }
   };
 
-  const handleToggleStatus = async (inv) => {
-    const nextStatus = inv.status === 'paid' ? 'unpaid' : 'paid';
-    setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: nextStatus } : i));
+  const applyStatusChange = async (inv, nextStatus, nextAmountPaid) => {
+    const prevStatus = inv.status;
+    const prevAmountPaid = inv.amount_paid;
+    setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: nextStatus, amount_paid: nextAmountPaid } : i));
     try {
-      await supplierInvoiceService.updateStatus(inv.id, nextStatus);
+      await supplierInvoiceService.updateStatus(inv.id, nextStatus, nextAmountPaid);
+      fetchSummary(filters);
     } catch (err) {
       console.error('Failed to update status:', err);
-      setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: inv.status } : i));
+      alert(err.response?.data?.response || 'Failed to update status.');
+      setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: prevStatus, amount_paid: prevAmountPaid } : i));
     }
+  };
+
+  const handleStatusChange = (inv, nextStatus) => {
+    if (nextStatus === inv.status && nextStatus !== 'partial') return;
+
+    if (nextStatus === 'paid') {
+      applyStatusChange(inv, 'paid', inv.amount);
+      return;
+    }
+    if (nextStatus === 'unpaid') {
+      applyStatusChange(inv, 'unpaid', 0);
+      return;
+    }
+
+    const input = window.prompt(`Enter amount received so far (out of ${fmt(inv.amount)}):`, inv.amount_paid || '');
+    if (input === null) return;
+    const parsed = parseFloat(input);
+    if (isNaN(parsed) || parsed < 0 || parsed > inv.amount) {
+      alert('Enter a valid amount between 0 and the invoice amount.');
+      return;
+    }
+    applyStatusChange(inv, 'partial', parsed);
   };
 
   const handleDelete = async (inv) => {
@@ -207,6 +279,7 @@ const SupplierInvoices = () => {
     try {
       await supplierInvoiceService.delete(inv.id);
       setInvoices(prev => prev.filter(i => i.id !== inv.id));
+      fetchSummary(filters);
     } catch (err) {
       alert(err.response?.data?.response || 'Failed to delete supplier invoice.');
     }
@@ -218,7 +291,17 @@ const SupplierInvoices = () => {
   const fmtDate = (d) =>
     new Date(d).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT));
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  if (!canView) {
+    return (
+      <div className="supplier-invoices-page">
+        <div className="no-data">
+          <p>Permission not granted to view invoices.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="supplier-invoices-page">
@@ -232,6 +315,39 @@ const SupplierInvoices = () => {
             + New Supplier Invoice
           </button>
         )}
+      </div>
+
+      <div className="si-summary">
+        <button
+          type="button"
+          className={`si-summary-card paid ${filters.status === 'paid' ? 'active' : ''}`}
+          onClick={() => handleSummaryClick('paid')}
+          title="Click to filter by paid"
+        >
+          <span className="si-summary-label">Paid</span>
+          <span className="si-summary-count">{summary.paid.count}</span>
+          <span className="si-summary-total">{fmt(summary.paid.total)}</span>
+        </button>
+        <button
+          type="button"
+          className={`si-summary-card partial ${filters.status === 'partial' ? 'active' : ''}`}
+          onClick={() => handleSummaryClick('partial')}
+          title="Click to filter by partial"
+        >
+          <span className="si-summary-label">Partial</span>
+          <span className="si-summary-count">{summary.partial.count}</span>
+          <span className="si-summary-total">Received {fmt(summary.partial.totalPaid)}</span>
+        </button>
+        <button
+          type="button"
+          className={`si-summary-card unpaid ${filters.status === 'unpaid' ? 'active' : ''}`}
+          onClick={() => handleSummaryClick('unpaid')}
+          title="Click to filter by unpaid"
+        >
+          <span className="si-summary-label">Unpaid</span>
+          <span className="si-summary-count">{summary.unpaid.count}</span>
+          <span className="si-summary-total">{fmt(summary.unpaid.total)}</span>
+        </button>
       </div>
 
       <div className="si-filters">
@@ -249,6 +365,7 @@ const SupplierInvoices = () => {
         >
           <option value="">All statuses</option>
           <option value="unpaid">Unpaid</option>
+          <option value="partial">Partial</option>
           <option value="paid">Paid</option>
         </select>
         <input
@@ -308,15 +425,38 @@ const SupplierInvoices = () => {
                     </td>
                     <td className="amount">{fmt(inv.amount)}</td>
                     <td>
-                      <button
-                        type="button"
-                        className={`status-badge status-${inv.status} ${canManage ? 'clickable' : ''}`}
-                        onClick={() => canManage && handleToggleStatus(inv)}
-                        disabled={!canManage}
-                        title={canManage ? 'Click to toggle paid/unpaid' : undefined}
-                      >
-                        {inv.status === 'paid' ? 'Paid' : 'Unpaid'}
-                      </button>
+                      <div className="si-status-cell">
+                        {canManage ? (
+                          <select
+                            className={`status-select status-${inv.status}`}
+                            value={inv.status}
+                            onChange={e => handleStatusChange(inv, e.target.value)}
+                          >
+                            <option value="unpaid">Unpaid</option>
+                            <option value="partial">Partial</option>
+                            <option value="paid">Paid</option>
+                          </select>
+                        ) : (
+                          <span className={`status-badge status-${inv.status}`}>
+                            {STATUS_LABELS[inv.status] || inv.status}
+                          </span>
+                        )}
+                        {inv.status === 'partial' && (
+                          <div className="si-partial-info">
+                            <span>{fmt(inv.amount_paid)} received</span>
+                            {canManage && (
+                              <button
+                                type="button"
+                                className="btn-icon"
+                                title="Edit amount received"
+                                onClick={() => handleStatusChange(inv, 'partial')}
+                              >
+                                ✎
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td>{inv.user?.name || <span className="muted">—</span>}</td>
                     <td>{fmtDate(inv.createdAt)}</td>
@@ -352,17 +492,27 @@ const SupplierInvoices = () => {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="pagination">
-              <button className="page-btn" disabled={page === 1} onClick={() => fetchInvoices(page - 1, filters)}>
-                Prev
-              </button>
-              <span className="page-info">Page {page} of {totalPages}</span>
-              <button className="page-btn" disabled={page >= totalPages} onClick={() => fetchInvoices(page + 1, filters)}>
-                Next
-              </button>
-            </div>
-          )}
+          <div className="pagination">
+            <label className="page-size-select">
+              Rows per page
+              <select value={limit} onChange={handleLimitChange} className="filter-select">
+                {LIMIT_OPTIONS.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </label>
+            {totalPages > 1 && (
+              <>
+                <button className="page-btn" disabled={page === 1} onClick={() => fetchInvoices(page - 1, filters)}>
+                  Prev
+                </button>
+                <span className="page-info">Page {page} of {totalPages}</span>
+                <button className="page-btn" disabled={page >= totalPages} onClick={() => fetchInvoices(page + 1, filters)}>
+                  Next
+                </button>
+              </>
+            )}
+          </div>
         </>
       )}
 

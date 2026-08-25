@@ -130,6 +130,16 @@ const Users = () => {
     }
   };
 
+  const handleToggleViewSupplierInvoices = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, view_supplier_invoices: value } : u));
+    try {
+      await userService.toggleViewSupplierInvoices(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update view supplier invoices:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, view_supplier_invoices: !value } : u));
+    }
+  };
+
   const handleToggleManageSupplierInvoices = async (targetUser, value) => {
     setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, manage_supplier_invoices: value } : u));
     try {
@@ -194,6 +204,7 @@ const Users = () => {
                   <th>Add Transactions</th>
                   <th>Edit Contacts</th>
                   <th>Manage Projects</th>
+                  <th>View Supplier Invoices</th>
                   <th>Manage Supplier Invoices</th>
                 </tr>
               </thead>
@@ -321,6 +332,18 @@ const Users = () => {
                           checked={u.manage_projects ?? false}
                           onChange={e => handleToggleManageProjects(u, e.target.checked)}
                           disabled={!isSuperAdmin()}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={(u.view_supplier_invoices || u.manage_supplier_invoices) ?? false}
+                          onChange={e => handleToggleViewSupplierInvoices(u, e.target.checked)}
+                          disabled={!isSuperAdmin() || u.manage_supplier_invoices}
+                          title={u.manage_supplier_invoices ? 'Implied by Manage Supplier Invoices' : undefined}
                         />
                         <span className="toggle-slider" />
                       </label>

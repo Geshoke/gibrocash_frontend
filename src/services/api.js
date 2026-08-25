@@ -56,6 +56,7 @@ export const userService = {
   toggleEditContacts: (id, edit_contacts) => api.patch(`/users/${id}/edit-contacts`, { edit_contacts }),
   toggleManageProjects: (id, manage_projects) => api.patch(`/users/${id}/manage-projects`, { manage_projects }),
   toggleManageSupplierInvoices: (id, manage_supplier_invoices) => api.patch(`/users/${id}/manage-supplier-invoices`, { manage_supplier_invoices }),
+  toggleViewSupplierInvoices: (id, view_supplier_invoices) => api.patch(`/users/${id}/view-supplier-invoices`, { view_supplier_invoices }),
 };
 
 // Payout recipient directory endpoints
@@ -218,12 +219,13 @@ export const invoiceService = {
 // Supplier invoice endpoints (attachments on proposals)
 export const supplierInvoiceService = {
   getAll: (params) => api.get('/supplier-invoices', { params }),
+  getSummary: (params) => api.get('/supplier-invoices/summary', { params }),
   getById: (id) => api.get(`/supplier-invoices/${id}`),
   create: (formData) => api.post('/supplier-invoices', formData, {
     headers: { 'Content-Type': undefined },
   }),
   update: (id, data) => api.patch(`/supplier-invoices/${id}`, data),
-  updateStatus: (id, status) => api.patch(`/supplier-invoices/${id}/status`, { status }),
+  updateStatus: (id, status, amount_paid) => api.patch(`/supplier-invoices/${id}/status`, { status, ...(amount_paid !== undefined ? { amount_paid } : {}) }),
   delete: (id) => api.delete(`/supplier-invoices/${id}`),
 };
 
