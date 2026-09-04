@@ -642,12 +642,6 @@ const Transactions = () => {
                         <span className="txn-badge-label">Project</span>
                         <span className="txn-badge-value">{selectedTransaction.imprest?.project?.name || '—'}</span>
                       </span>
-                      {selectedTransaction.mpesa_code && (
-                        <span className="txn-detail-badge mpesa">
-                          <span className="txn-badge-label">M-Pesa Code</span>
-                          <span className="txn-badge-value">{selectedTransaction.mpesa_code}</span>
-                        </span>
-                      )}
                     </div>
                   </div>
                   <div className="txn-detail-header-actions">
@@ -933,6 +927,31 @@ const Transactions = () => {
                       <div className="txn-detail-field txn-detail-total">
                         <span className="txn-detail-label">Total</span>
                         <span className="txn-detail-value debit">{formatCurrency(selectedTransaction.price)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* M-Pesa payout info */}
+                  {selectedTransaction.mpesa_code && (
+                    <div className="txn-detail-section">
+                      <span className="txn-detail-section-title">M-Pesa Payout</span>
+                      <div className="txn-mpesa-box">
+                        <div className="txn-detail-field">
+                          <span className="txn-detail-label">Code</span>
+                          <span className="txn-detail-value mpesa-mono">{selectedTransaction.mpesa_code}</span>
+                        </div>
+                        {selectedTransaction.mpesa_recipient_name && (
+                          <div className="txn-detail-field">
+                            <span className="txn-detail-label">Recipient</span>
+                            <span className="txn-detail-value">{selectedTransaction.mpesa_recipient_name}</span>
+                          </div>
+                        )}
+                        {selectedTransaction.mpesa_recipient_phone && (
+                          <div className="txn-detail-field">
+                            <span className="txn-detail-label">Phone</span>
+                            <span className="txn-detail-value mpesa-mono">{selectedTransaction.mpesa_recipient_phone}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

@@ -292,6 +292,8 @@ const Payouts = () => {
         originatorConversationId: p.originatorConversationId,
         financeTransactionId: p.payoutMeta?.financeTransactionId || null,
         mpesaCode: p.transactionReceipt || null,
+        mpesaPhone: p.partyB || null,
+        mpesaRecipientName: p.receiverPublicName || null,
         transactionData: {
           imprestAccount_id: p.payoutMeta?.imprestId   || null,
           projectId:         p.payoutMeta?.projectId   || null,
@@ -302,7 +304,9 @@ const Payouts = () => {
           userID:            p.payoutMeta?.userId      || null,
           vat_charged:       0,
           url_image:         null,
-          mpesa_code:        p.transactionReceipt || null,
+          mpesa_code:            p.transactionReceipt || null,
+          mpesa_recipient_phone: p.partyB || null,
+          mpesa_recipient_name:  p.receiverPublicName || null,
         },
       }));
       setServerFailedTxns(entries);
@@ -413,7 +417,8 @@ const Payouts = () => {
     setShowPollEscape(false);
     pollEscapeTimerRef.current = setTimeout(() => setShowPollEscape(true), 60000);
 
-    const resolveImprestAndProceed = async (mpesaCode) => {
+    const resolveImprestAndProceed = async (mpesaInfo) => {
+      const { code: mpesaCode, phone: mpesaPhone, name: mpesaRecipientName } = mpesaInfo || {};
       const m = modalRef.current;
 
       // ── Batch payout: auto-record each line item ──────────────
@@ -442,7 +447,7 @@ const Payouts = () => {
                 payoutAmount: item.amount,
                 imprestName,
                 imprestProject: item.projectName || null,
-                transactionData: { imprestAccount_id: null, item: item.description, itemQuantity: 1, unitPrice: item.amount, Total_amount: item.amount, userID: user.id, vat_charged: 0, url_image: null, mpesa_code: mpesaCode },
+                transactionData: { imprestAccount_id: null, item: item.description, itemQuantity: 1, unitPrice: item.amount, Total_amount: item.amount, userID: user.id, vat_charged: 0, url_image: null, mpesa_code: mpesaCode, mpesa_recipient_phone: mpesaPhone, mpesa_recipient_name: mpesaRecipientName },
               });
               continue;
             }
@@ -459,6 +464,8 @@ const Payouts = () => {
               vat_charged: 0,
               url_image: null,
               mpesa_code: mpesaCode,
+              mpesa_recipient_phone: mpesaPhone,
+              mpesa_recipient_name: mpesaRecipientName,
             });
           } catch {
             newFailed.push({
@@ -468,7 +475,7 @@ const Payouts = () => {
               payoutAmount: item.amount,
               imprestName,
               imprestProject: item.projectName || null,
-              transactionData: { imprestAccount_id: imprestId, item: item.description, itemQuantity: 1, unitPrice: item.amount, Total_amount: item.amount, userID: user.id, vat_charged: 0, url_image: null, mpesa_code: mpesaCode },
+              transactionData: { imprestAccount_id: imprestId, item: item.description, itemQuantity: 1, unitPrice: item.amount, Total_amount: item.amount, userID: user.id, vat_charged: 0, url_image: null, mpesa_code: mpesaCode, mpesa_recipient_phone: mpesaPhone, mpesa_recipient_name: mpesaRecipientName },
             });
           }
         }
@@ -490,7 +497,7 @@ const Payouts = () => {
       }
 
       // ── Single txn_payout ─────────────────────────────────────
-      setModal(prev => (prev ? { ...prev, payload: { ...prev.payload, mpesaCode } } : prev));
+      setModal(prev => (prev ? { ...prev, payload: { ...prev.payload, mpesaCode, mpesaPhone, mpesaRecipientName } } : prev));
 
       let imprest = m?.payload?.imprest || null;
 
@@ -523,7 +530,11 @@ const Payouts = () => {
         if (data.status === 'success') {
           clearInterval(pollRef.current);
           fetchLedger(); // update ledger immediately on confirmed success
-          await resolveImprestAndProceed(data.transactionReceipt || null);
+          await resolveImprestAndProceed({
+            code: data.transactionReceipt || null,
+            phone: data.partyB || null,
+            name: data.receiverPublicName || null,
+          });
         } else if (data.status === 'failed' || data.status === 'timeout') {
           clearInterval(pollRef.current);
           fetchLedger();
@@ -896,7 +907,9 @@ const Payouts = () => {
       userID:            user.id,
       vat_charged:       vat,
       url_image:         imageFilename,
-      mpesa_code:        modal?.payload?.mpesaCode || null,
+      mpesa_code:            modal?.payload?.mpesaCode || null,
+      mpesa_recipient_phone: modal?.payload?.mpesaPhone || null,
+      mpesa_recipient_name:  modal?.payload?.mpesaRecipientName || null,
     };
 
     try {
@@ -970,6 +983,8 @@ const Payouts = () => {
           vat_charged: vat,
           price:       total,
           ...(retryEntry.mpesaCode ? { mpesa_code: retryEntry.mpesaCode } : {}),
+          ...(retryEntry.mpesaPhone ? { mpesa_recipient_phone: retryEntry.mpesaPhone } : {}),
+          ...(retryEntry.mpesaRecipientName ? { mpesa_recipient_name: retryEntry.mpesaRecipientName } : {}),
         });
         if (retryImageFile) {
           const fd = new FormData();
@@ -1041,7 +1056,9 @@ const Payouts = () => {
       userID:            retryEntry.transactionData.userID,
       vat_charged:       vat,
       url_image:         imageFilename,
-      mpesa_code:        retryEntry.mpesaCode || retryEntry.transactionData.mpesa_code || null,
+      mpesa_code:            retryEntry.mpesaCode || retryEntry.transactionData.mpesa_code || null,
+      mpesa_recipient_phone: retryEntry.mpesaPhone || retryEntry.transactionData.mpesa_recipient_phone || null,
+      mpesa_recipient_name:  retryEntry.mpesaRecipientName || retryEntry.transactionData.mpesa_recipient_name || null,
     };
 
     try {

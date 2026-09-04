@@ -380,17 +380,17 @@
   color: #7ab3cc;
 }
 
-.txn-detail-badge.mpesa {
+.txn-mpesa-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
   background: #f0fff4;
-  border-color: #c6f6d5;
+  border: 1px solid #c6f6d5;
+  border-radius: 10px;
+  padding: 14px 16px;
 }
 
-.txn-detail-badge.mpesa .txn-badge-label {
-  color: #38a169;
-}
-
-.txn-detail-badge.mpesa .txn-badge-value {
-  color: #2f855a;
+.mpesa-mono {
   font-family: monospace;
 }
 
