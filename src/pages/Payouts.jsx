@@ -291,6 +291,7 @@ const Payouts = () => {
         isServerEntry: true,
         originatorConversationId: p.originatorConversationId,
         financeTransactionId: p.payoutMeta?.financeTransactionId || null,
+        mpesaCode: p.transactionReceipt || null,
         transactionData: {
           imprestAccount_id: p.payoutMeta?.imprestId   || null,
           projectId:         p.payoutMeta?.projectId   || null,
@@ -301,6 +302,7 @@ const Payouts = () => {
           userID:            p.payoutMeta?.userId      || null,
           vat_charged:       0,
           url_image:         null,
+          mpesa_code:        p.transactionReceipt || null,
         },
       }));
       setServerFailedTxns(entries);
@@ -411,7 +413,7 @@ const Payouts = () => {
     setShowPollEscape(false);
     pollEscapeTimerRef.current = setTimeout(() => setShowPollEscape(true), 60000);
 
-    const resolveImprestAndProceed = async () => {
+    const resolveImprestAndProceed = async (mpesaCode) => {
       const m = modalRef.current;
 
       // ── Batch payout: auto-record each line item ──────────────
@@ -440,7 +442,7 @@ const Payouts = () => {
                 payoutAmount: item.amount,
                 imprestName,
                 imprestProject: item.projectName || null,
-                transactionData: { imprestAccount_id: null, item: item.description, itemQuantity: 1, unitPrice: item.amount, Total_amount: item.amount, userID: user.id, vat_charged: 0, url_image: null },
+                transactionData: { imprestAccount_id: null, item: item.description, itemQuantity: 1, unitPrice: item.amount, Total_amount: item.amount, userID: user.id, vat_charged: 0, url_image: null, mpesa_code: mpesaCode },
               });
               continue;
             }
@@ -456,6 +458,7 @@ const Payouts = () => {
               userID: user.id,
               vat_charged: 0,
               url_image: null,
+              mpesa_code: mpesaCode,
             });
           } catch {
             newFailed.push({
@@ -465,7 +468,7 @@ const Payouts = () => {
               payoutAmount: item.amount,
               imprestName,
               imprestProject: item.projectName || null,
-              transactionData: { imprestAccount_id: imprestId, item: item.description, itemQuantity: 1, unitPrice: item.amount, Total_amount: item.amount, userID: user.id, vat_charged: 0, url_image: null },
+              transactionData: { imprestAccount_id: imprestId, item: item.description, itemQuantity: 1, unitPrice: item.amount, Total_amount: item.amount, userID: user.id, vat_charged: 0, url_image: null, mpesa_code: mpesaCode },
             });
           }
         }
@@ -487,6 +490,8 @@ const Payouts = () => {
       }
 
       // ── Single txn_payout ─────────────────────────────────────
+      setModal(prev => (prev ? { ...prev, payload: { ...prev.payload, mpesaCode } } : prev));
+
       let imprest = m?.payload?.imprest || null;
 
       if (!imprest && m?.payload?.projectId) {
@@ -518,7 +523,7 @@ const Payouts = () => {
         if (data.status === 'success') {
           clearInterval(pollRef.current);
           fetchLedger(); // update ledger immediately on confirmed success
-          await resolveImprestAndProceed();
+          await resolveImprestAndProceed(data.transactionReceipt || null);
         } else if (data.status === 'failed' || data.status === 'timeout') {
           clearInterval(pollRef.current);
           fetchLedger();
@@ -891,6 +896,7 @@ const Payouts = () => {
       userID:            user.id,
       vat_charged:       vat,
       url_image:         imageFilename,
+      mpesa_code:        modal?.payload?.mpesaCode || null,
     };
 
     try {
@@ -963,6 +969,7 @@ const Payouts = () => {
           unitPrice:   parseFloat(unitPrice),
           vat_charged: vat,
           price:       total,
+          ...(retryEntry.mpesaCode ? { mpesa_code: retryEntry.mpesaCode } : {}),
         });
         if (retryImageFile) {
           const fd = new FormData();
@@ -1034,6 +1041,7 @@ const Payouts = () => {
       userID:            retryEntry.transactionData.userID,
       vat_charged:       vat,
       url_image:         imageFilename,
+      mpesa_code:        retryEntry.mpesaCode || retryEntry.transactionData.mpesa_code || null,
     };
 
     try {

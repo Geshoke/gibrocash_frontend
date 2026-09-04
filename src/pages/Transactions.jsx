@@ -604,6 +604,9 @@ const Transactions = () => {
                         <span className="txn-list-imprest">{txn.imprest?.name || '—'}</span>
                         <span className="txn-list-amount">{formatCurrency(txn.price)}</span>
                       </div>
+                      {txn.mpesa_code && (
+                        <div className="txn-list-mpesa-code">M-Pesa: {txn.mpesa_code}</div>
+                      )}
                       {txn.User?.name && (
                         <div className="txn-list-uploader">by {txn.User.name}</div>
                       )}
@@ -639,6 +642,12 @@ const Transactions = () => {
                         <span className="txn-badge-label">Project</span>
                         <span className="txn-badge-value">{selectedTransaction.imprest?.project?.name || '—'}</span>
                       </span>
+                      {selectedTransaction.mpesa_code && (
+                        <span className="txn-detail-badge mpesa">
+                          <span className="txn-badge-label">M-Pesa Code</span>
+                          <span className="txn-badge-value">{selectedTransaction.mpesa_code}</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="txn-detail-header-actions">

@@ -293,6 +293,13 @@
   margin-top: 3px;
 }
 
+.txn-list-mpesa-code {
+  font-size: 0.72rem;
+  color: #2f855a;
+  font-family: monospace;
+  margin-top: 3px;
+}
+
 /* ── Right detail panel ───────────────────────────────────── */
 .txn-detail-panel {
   flex: 1;
@@ -371,6 +378,20 @@
 
 .txn-detail-badge.project .txn-badge-value {
   color: #7ab3cc;
+}
+
+.txn-detail-badge.mpesa {
+  background: #f0fff4;
+  border-color: #c6f6d5;
+}
+
+.txn-detail-badge.mpesa .txn-badge-label {
+  color: #38a169;
+}
+
+.txn-detail-badge.mpesa .txn-badge-value {
+  color: #2f855a;
+  font-family: monospace;
 }
 
 .close-preview-btn {
