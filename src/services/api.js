@@ -165,6 +165,20 @@ const paybillApi = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Forward the same staff login token used against GibroCash_node — the
+// paybill server verifies it with the same JWT secret so only an
+// authenticated session can request or authorise a payout.
+paybillApi.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 export const payoutService = {
   // Called when user clicks Initiate — generates PIN and sends SMS
   // Body: { type, payload, label, amount }
