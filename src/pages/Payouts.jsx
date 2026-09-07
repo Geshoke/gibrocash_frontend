@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
+import { PDFDownloadLink } from '@react-pdf/renderer';
 import { useAuth } from '../context/AuthContext';
 import { payoutService, imprestService, transactionService, imageService, projectService, recipientService } from '../services/api';
 import RecipientPicker from '../components/RecipientPicker';
+import PayoutVoucherPDF from '../components/PayoutVoucherPDF';
 import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Payouts.css';
 
@@ -58,6 +60,38 @@ const STATUS_META = {
 const VAT_RATE = 0.16;
 
 const TYPE_LABEL = { payroll: 'Payroll', single: 'Single Payment', b2b: 'B2B Payment', txn_payout: 'Transaction Payout', batch_payout: 'Batch Payout' };
+
+// ── Payment voucher builders ─────────────────────────────────────
+// Voucher numbers are derived entirely from data already on the ledger
+// entry (its id) — no backend column or migration needed.
+const buildVoucher = (entry) => ({
+  voucherNumber:      `PV-${String(entry.id).toUpperCase()}`,
+  date:               entry.date,
+  status:             entry.status,
+  type:               entry.type,
+  description:        entry.label,
+  amount:             entry.amount,
+  initiatedBy:        entry.initiatedBy,
+  recipientName:      entry.payload?.receiverPublicName || null,
+  recipientPhone:     entry.payload?.partyB || null,
+  mpesaCode:          entry.payload?.transactionReceipt || null,
+  accountReference:   entry.payload?.accountReference || null,
+  destinationAccount: entry.payload?.destinationAccount || null,
+});
+
+const buildPayrollRowVoucher = (entry, row) => ({
+  voucherNumber:  `PV-${String(entry.id).toUpperCase()}-${String(row.staffNo || row._id || '').toUpperCase()}`,
+  date:           entry.date,
+  status:         entry.status,
+  type:           'payroll',
+  description:    row.name ? `${entry.label} — ${row.name}` : entry.label,
+  amount:         row.netPay,
+  initiatedBy:    entry.initiatedBy,
+  recipientName:  row.name || null,
+  recipientPhone: row.resolvedPhone || null,
+  mpesaCode:      row.transactionReceipt || row.code || null,
+  staffNo:        row.staffNo || null,
+});
 
 const NAV_ITEMS = [
   { key: 'payroll',     icon: '💰', label: 'Payroll'             },
@@ -137,6 +171,7 @@ const Payouts = () => {
   const [expanded, setExpanded]     = useState(null);
   const [historyPage, setHistoryPage]         = useState(1);
   const [historyPageSize, setHistoryPageSize] = useState(20);
+  const [voucher, setVoucher]       = useState(null);
 
   // ── Projects ─────────────────────────────────────────────────
   const [projects, setProjects]             = useState([]);
@@ -1286,9 +1321,14 @@ const Payouts = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {pageEntries.map(entry => (
+                            {pageEntries.map(entry => {
+                              const isBatch = Array.isArray(entry.payload?.rows);
+                              return (
                               <React.Fragment key={entry.id}>
-                                <tr>
+                                <tr
+                                  className={isBatch ? '' : 'po-row-clickable'}
+                                  onClick={() => { if (!isBatch) setVoucher(buildVoucher(entry)); }}
+                                >
                                   <td className="td-mono">{fmtDate(entry.date)}</td>
                                   <td><span className={`po-type-badge ${entry.type}`}>{TYPE_LABEL[entry.type]}</span></td>
                                   <td className="td-desc">{entry.label}</td>
@@ -1301,20 +1341,28 @@ const Payouts = () => {
                                     </span>
                                   </td>
                                   <td>
-                                    {entry.type === 'payroll' && (
+                                    {isBatch ? (
                                       <button
                                         className="po-expand-btn"
-                                        onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}
+                                        onClick={(e) => { e.stopPropagation(); setExpanded(expanded === entry.id ? null : entry.id); }}
                                       >
                                         {expanded === entry.id ? '▲' : '▼'}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        className="po-voucher-btn"
+                                        title="View payment voucher"
+                                        onClick={(e) => { e.stopPropagation(); setVoucher(buildVoucher(entry)); }}
+                                      >
+                                        🧾
                                       </button>
                                     )}
                                   </td>
                                 </tr>
 
-                                {entry.type === 'payroll' && expanded === entry.id && (
+                                {isBatch && expanded === entry.id && (
                                   <tr className="po-sub-row">
-                                    <td colSpan={6}>
+                                    <td colSpan={7}>
                                       <div className="po-sub-wrap">
                                         <table className="po-table po-sub-table">
                                           <thead>
@@ -1324,11 +1372,16 @@ const Payouts = () => {
                                               <th>Net Pay</th>
                                               <th>Phone</th>
                                               <th>Status</th>
+                                              <th></th>
                                             </tr>
                                           </thead>
                                           <tbody>
                                             {entry.payload.rows.map(row => (
-                                              <tr key={row._id}>
+                                              <tr
+                                                key={row._id}
+                                                className="po-row-clickable"
+                                                onClick={() => setVoucher(buildPayrollRowVoucher(entry, row))}
+                                              >
                                                 <td>{row.staffNo || '—'}</td>
                                                 <td>{row.name}</td>
                                                 <td>{fmtCur(row.netPay)}</td>
@@ -1339,6 +1392,15 @@ const Payouts = () => {
                                                     {STATUS_META[entry.status]?.label}
                                                   </span>
                                                 </td>
+                                                <td>
+                                                  <button
+                                                    className="po-voucher-btn"
+                                                    title="View payment voucher"
+                                                    onClick={(e) => { e.stopPropagation(); setVoucher(buildPayrollRowVoucher(entry, row)); }}
+                                                  >
+                                                    🧾
+                                                  </button>
+                                                </td>
                                               </tr>
                                             ))}
                                           </tbody>
@@ -1348,7 +1410,8 @@ const Payouts = () => {
                                   </tr>
                                 )}
                               </React.Fragment>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -2511,6 +2574,92 @@ const Payouts = () => {
                   {retrying ? 'Recording…' : 'Retry Transaction'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Payment Voucher Modal ─────────────────────────────────── */}
+      {voucher && (
+        <div className="voucher-overlay" onClick={() => setVoucher(null)}>
+          <div className="voucher-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="voucher-modal-head">
+              <div className="voucher-company">
+                <div className="voucher-company-name">GIBRO Enterprise LTD</div>
+                <div className="voucher-company-meta">Likoni Road, Nairobi · +254710341246</div>
+              </div>
+              <button className="voucher-close-btn" onClick={() => setVoucher(null)} aria-label="Close">×</button>
+            </div>
+
+            <div className="voucher-modal-body">
+              <div className="voucher-title-row">
+                <h2>Payment Voucher</h2>
+                <span className={`po-status-txt ${STATUS_META[voucher.status]?.cls}`}>
+                  <span className="po-status-dot" style={{ background: STATUS_META[voucher.status]?.dot }}></span>
+                  {STATUS_META[voucher.status]?.label}
+                </span>
+              </div>
+
+              <div className="voucher-meta-row">
+                <div>
+                  <span className="voucher-label">Voucher No.</span>
+                  <span className="voucher-value mono">{voucher.voucherNumber}</span>
+                </div>
+                <div>
+                  <span className="voucher-label">Date</span>
+                  <span className="voucher-value">{fmtDate(voucher.date)}</span>
+                </div>
+              </div>
+
+              <div className="voucher-section">
+                <span className="voucher-label">Paid To</span>
+                <div className="voucher-value big">{voucher.recipientName || '—'}</div>
+                {voucher.recipientPhone && <div className="voucher-sub">{voucher.recipientPhone}</div>}
+                {voucher.destinationAccount && <div className="voucher-sub">Account: {voucher.destinationAccount}</div>}
+                {voucher.accountReference && <div className="voucher-sub">Reference: {voucher.accountReference}</div>}
+              </div>
+
+              <div className="voucher-grid">
+                <div>
+                  <span className="voucher-label">Payment Type</span>
+                  <span className="voucher-value">{TYPE_LABEL[voucher.type] || voucher.type}</span>
+                </div>
+                <div>
+                  <span className="voucher-label">Initiated By</span>
+                  <span className="voucher-value">{voucher.initiatedBy || '—'}</span>
+                </div>
+                <div>
+                  <span className="voucher-label">M-Pesa Transaction Code</span>
+                  <span className="voucher-value mono">{voucher.mpesaCode || '—'}</span>
+                </div>
+                {voucher.staffNo && (
+                  <div>
+                    <span className="voucher-label">Staff No.</span>
+                    <span className="voucher-value">{voucher.staffNo}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="voucher-desc-block">
+                <span className="voucher-label">Description</span>
+                <p>{voucher.description || '—'}</p>
+              </div>
+
+              <div className="voucher-amount-row">
+                <span className="voucher-amount-label">Amount Paid</span>
+                <span className="voucher-amount-value">{fmtCur(voucher.amount)}</span>
+              </div>
+            </div>
+
+            <div className="pin-modal-actions voucher-modal-actions">
+              <button className="pin-cancel-btn" onClick={() => setVoucher(null)}>Close</button>
+              <PDFDownloadLink
+                className="pin-auth-btn voucher-download-link"
+                document={<PayoutVoucherPDF voucher={voucher} />}
+                fileName={`${voucher.voucherNumber}.pdf`}
+              >
+                {({ loading }) => (loading ? 'Preparing PDF…' : 'Download PDF')}
+              </PDFDownloadLink>
             </div>
           </div>
         </div>
