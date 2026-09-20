@@ -57,6 +57,7 @@ export const userService = {
   toggleManageProjects: (id, manage_projects) => api.patch(`/users/${id}/manage-projects`, { manage_projects }),
   toggleManageSupplierInvoices: (id, manage_supplier_invoices) => api.patch(`/users/${id}/manage-supplier-invoices`, { manage_supplier_invoices }),
   toggleViewSupplierInvoices: (id, view_supplier_invoices) => api.patch(`/users/${id}/view-supplier-invoices`, { view_supplier_invoices }),
+  toggleDeleteReceipts: (id, delete_receipts) => api.patch(`/users/${id}/delete-receipts`, { delete_receipts }),
 };
 
 // Payout recipient directory endpoints
@@ -106,6 +107,7 @@ export const transactionService = {
   uploadReceipt: (id, formData) => api.patch(`/transactions/${id}/receipt`, formData, {
     headers: { 'Content-Type': undefined },
   }),
+  deleteReceipt: (id) => api.delete(`/transactions/${id}/receipt`),
 };
 
 // Category endpoints

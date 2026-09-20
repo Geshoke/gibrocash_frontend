@@ -51,6 +51,7 @@ export const AuthProvider = ({ children }) => {
       manage_projects: profile?.manage_projects ?? false,
       manage_supplier_invoices: profile?.manage_supplier_invoices ?? false,
       view_supplier_invoices: profile?.view_supplier_invoices ?? false,
+      delete_receipts: profile?.delete_receipts ?? false,
     };
 
     localStorage.setItem('user', JSON.stringify(userObj));
@@ -117,6 +118,10 @@ export const AuthProvider = ({ children }) => {
     return user?.view_supplier_invoices === true || user?.manage_supplier_invoices === true;
   };
 
+  const canDeleteReceipts = () => {
+    return user?.delete_receipts === true;
+  };
+
   const value = {
     user,
     login,
@@ -134,6 +139,7 @@ export const AuthProvider = ({ children }) => {
     canManageProjects,
     canManageSupplierInvoices,
     canViewSupplierInvoices,
+    canDeleteReceipts,
     isAuthenticated: !!user,
     loading,
   };

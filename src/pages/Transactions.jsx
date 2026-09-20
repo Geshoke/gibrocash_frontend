@@ -8,7 +8,7 @@ const LIMIT = 50;
 const EMPTY_FILTERS = { search: '', from_date: '', to_date: '', category_id: '' };
 
 const Transactions = () => {
-  const { user, canViewAllImprests, canEditTransactions, canMoveTransactions } = useAuth();
+  const { user, canViewAllImprests, canEditTransactions, canMoveTransactions, canDeleteReceipts } = useAuth();
 
   // ── Data ──────────────────────────────────────────────────────
   const [transactions, setTransactions] = useState([]);
@@ -26,6 +26,8 @@ const Transactions = () => {
   const [hasNoReceipt, setHasNoReceipt]   = useState(false);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [receiptUploadError, setReceiptUploadError] = useState('');
+  const [deletingReceipt, setDeletingReceipt] = useState(false);
+  const [receiptDeleteError, setReceiptDeleteError] = useState('');
 
   // ── Categories ────────────────────────────────────────────────
   const [categories, setCategories]                   = useState([]);
@@ -212,6 +214,7 @@ const Transactions = () => {
     if (selectedTransaction?.id === txn.id) return;
     setSelectedTransaction(txn);
     setReceiptUploadError('');
+    setReceiptDeleteError('');
     setCategoryPopoverOpen(false);
     setEditMode(false);
     loadTransactionImage(txn);
@@ -238,6 +241,27 @@ const Transactions = () => {
       setReceiptUploadError('Upload failed. Please try again.');
     } finally {
       setUploadingReceipt(false);
+    }
+  };
+
+  const handleDeleteReceipt = async () => {
+    if (!selectedTransaction || !canDeleteReceipts()) return;
+    if (!window.confirm('Delete this receipt? You will be able to upload a replacement afterwards.')) return;
+    setDeletingReceipt(true);
+    setReceiptDeleteError('');
+    try {
+      await transactionService.deleteReceipt(selectedTransaction.id);
+      const withoutReceipt = (t) => ({ ...t, images_id: null, image: { ...(t.image || {}), url: null } });
+      setTransactions(prev => prev.map(t => t.id === selectedTransaction.id ? withoutReceipt(t) : t));
+      setSelectedTransaction(prev => prev ? withoutReceipt(prev) : prev);
+      setTransactionImageUrl(null);
+      setImageError('');
+      setHasNoReceipt(true);
+    } catch (err) {
+      console.error('Receipt delete failed:', err);
+      setReceiptDeleteError('Delete failed. Please try again.');
+    } finally {
+      setDeletingReceipt(false);
     }
   };
 
@@ -1023,12 +1047,27 @@ const Transactions = () => {
                           )}
                         </div>
                       ) : transactionImageUrl ? (
-                        transactionImageUrl.toLowerCase().endsWith('.pdf') ? (
-                          <iframe src={transactionImageUrl} title="Receipt" className="pdf-preview" />
-                        ) : (
-                          <img src={transactionImageUrl} alt="Receipt"
-                            onClick={() => window.open(transactionImageUrl, '_blank')} />
-                        )
+                        <div className="txn-receipt-preview">
+                          {transactionImageUrl.toLowerCase().endsWith('.pdf') ? (
+                            <iframe src={transactionImageUrl} title="Receipt" className="pdf-preview" />
+                          ) : (
+                            <img src={transactionImageUrl} alt="Receipt"
+                              onClick={() => window.open(transactionImageUrl, '_blank')} />
+                          )}
+                          {canDeleteReceipts() && (
+                            <button
+                              type="button"
+                              className="txn-receipt-delete-btn"
+                              disabled={deletingReceipt}
+                              onClick={handleDeleteReceipt}
+                            >
+                              {deletingReceipt ? 'Deleting…' : 'Delete receipt'}
+                            </button>
+                          )}
+                          {receiptDeleteError && (
+                            <p className="image-error-message">{receiptDeleteError}</p>
+                          )}
+                        </div>
                       ) : null}
                     </div>
                   </div>

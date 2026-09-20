@@ -150,6 +150,16 @@ const Users = () => {
     }
   };
 
+  const handleToggleDeleteReceipts = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, delete_receipts: value } : u));
+    try {
+      await userService.toggleDeleteReceipts(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update delete receipts:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, delete_receipts: !value } : u));
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-KE', {
       year: 'numeric',
@@ -206,6 +216,7 @@ const Users = () => {
                   <th>Manage Projects</th>
                   <th>View Supplier Invoices</th>
                   <th>Manage Supplier Invoices</th>
+                  <th>Delete Receipts</th>
                 </tr>
               </thead>
               <tbody>
@@ -354,6 +365,17 @@ const Users = () => {
                           type="checkbox"
                           checked={u.manage_supplier_invoices ?? false}
                           onChange={e => handleToggleManageSupplierInvoices(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.delete_receipts ?? false}
+                          onChange={e => handleToggleDeleteReceipts(u, e.target.checked)}
                           disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />
