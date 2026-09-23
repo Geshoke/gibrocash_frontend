@@ -62,6 +62,7 @@ const Transactions = () => {
   const [moveSaving, setMoveSaving]             = useState(false);
   const [moveError, setMoveError]               = useState('');
   const [moveSuccess, setMoveSuccess]           = useState('');
+  const [creditDestinationAllocation, setCreditDestinationAllocation] = useState(false);
   const moveComboRef = useRef(null);
 
   // ── Filters ───────────────────────────────────────────────────
@@ -427,13 +428,14 @@ const Transactions = () => {
     setMoveError('');
     setMoveSuccess('');
     try {
-      await transactionService.move(selectedTransaction.id, moveImprestId);
+      await transactionService.move(selectedTransaction.id, moveImprestId, creditDestinationAllocation);
       const destImprest = allImprests.find(i => i.id === moveImprestId);
       const updated = { ...selectedTransaction, imprest_id: moveImprestId, imprest: { ...selectedTransaction.imprest, id: moveImprestId, name: destImprest?.name || '' } };
       setSelectedTransaction(updated);
       setTransactions(prev => prev.map(t => t.id === updated.id ? { ...t, imprest_id: moveImprestId, imprest: updated.imprest } : t));
       setMoveSuccess(`Moved to ${destImprest?.name || 'new imprest'}.`);
       setMoveImprestId('');
+      setCreditDestinationAllocation(false);
     } catch {
       setMoveError('Failed to move transaction. Please try again.');
     } finally {
@@ -914,6 +916,17 @@ const Transactions = () => {
                                   </div>
                                 ) : (
                                   <div className="txn-move-card empty">Select an imprest to preview its balance</div>
+                                )}
+
+                                {moveImprestId && (
+                                  <label className="txn-move-credit-toggle">
+                                    <input
+                                      type="checkbox"
+                                      checked={creditDestinationAllocation}
+                                      onChange={e => setCreditDestinationAllocation(e.target.checked)}
+                                    />
+                                    Also credit the destination's allocated amount
+                                  </label>
                                 )}
 
                                 {moveError   && <p className="txn-edit-error">{moveError}</p>}

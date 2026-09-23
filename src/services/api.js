@@ -102,7 +102,7 @@ export const transactionService = {
   }),
   delete: (transactionID) => api.delete(`/create_transaction/${transactionID}`),
   update: (id, data) => api.patch(`/transactions/${id}`, data),
-  move: (id, imprest_id) => api.patch(`/transactions/${id}/move`, { imprest_id }),
+  move: (id, imprest_id, creditDestinationAllocation) => api.patch(`/transactions/${id}/move`, { imprest_id, creditDestinationAllocation }),
   split: (id, parts) => api.post(`/transactions/${id}/split`, { parts }),
   uploadReceipt: (id, formData) => api.patch(`/transactions/${id}/receipt`, formData, {
     headers: { 'Content-Type': undefined },

@@ -845,6 +845,14 @@
   color: #2f855a;
   margin: 0;
 }
+.txn-move-credit-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #4a5568);
+  cursor: pointer;
+}
 
 .txn-move-columns {
   display: flex;
