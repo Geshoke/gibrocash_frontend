@@ -603,6 +603,7 @@
 /* Form footer + initiate button */
 .po-form-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 14px;
   padding-top: 8px;
@@ -1583,4 +1584,155 @@
   padding-top: 16px;
   border-top: 2px solid #e2e8f0;
   margin-top: 4px;
+}
+
+/* ── Saved payouts ───────────────────────────────────────────── */
+.po-type-badge.txn_payout   { background: #fef3c7; color: #b45309; }
+.po-type-badge.batch_payout { background: #fce7f3; color: #be185d; }
+
+.po-warn-banner {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #c2410c;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 12px 20px;
+  border-radius: 8px;
+  margin: 0 0 4px;
+}
+
+.po-saved-list { display: flex; flex-direction: column; }
+
+.po-saved-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.po-saved-item:last-child { border-bottom: none; }
+
+.po-saved-info { flex: 1; min-width: 0; }
+
+.po-saved-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.po-saved-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.po-saved-summary {
+  font-size: 0.78rem;
+  color: #64748b;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.po-saved-chip {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.po-saved-chip.claimed   { background: #fef3c7; color: #b45309; }
+.po-saved-chip.submitted { background: #dbeafe; color: #1d4ed8; }
+
+.po-saved-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.po-saved-load-btn {
+  padding: 5px 14px;
+  background: #1e293b;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.po-saved-load-btn:hover:not(:disabled) { background: #0f172a; }
+.po-saved-load-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+.po-saved-discard-btn {
+  padding: 4px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: none;
+  font-size: 0.82rem;
+  color: #dc2626;
+  cursor: pointer;
+}
+.po-saved-discard-btn:hover:not(:disabled) { background: #fef2f2; }
+.po-saved-discard-btn:disabled,
+.po-saved-actions .po-page-size-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.po-saved-rename { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.po-saved-rename input {
+  flex: 1;
+  min-width: 160px;
+  padding: 5px 10px;
+  border: 1.5px solid #3b82f6;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.po-saved-rename .po-field-error { flex-basis: 100%; margin: 0; }
+
+.po-draft-banner {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.84rem;
+  color: #1e3a8a;
+}
+.po-draft-banner-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.po-draft-warnings {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  color: #b45309;
+  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.po-draft-banner .po-field-error { margin: 8px 0 0; }
+
+.po-batch-draft-banner { padding: 0 24px 16px; }
+
+.po-form-footer .po-initiate-btn,
+.po-save-draft-btn { white-space: nowrap; }
+
+.po-save-draft-btn {
+  padding: 10px 18px;
+  background: white;
+  color: #1e293b;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.po-save-draft-btn:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
+.po-save-draft-btn:disabled { color: #94a3b8; border-color: #e2e8f0; cursor: not-allowed; }
+
+.po-batch-row-issue td { background: #fff7ed; }
+.po-batch-issue { font-size: 0.72rem; color: #c2410c; margin-top: 2px; }
+
+@media (max-width: 600px) {
+  .po-saved-item { flex-wrap: wrap; }
+  .po-saved-actions { width: 100%; justify-content: flex-end; }
 }

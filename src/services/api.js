@@ -58,6 +58,7 @@ export const userService = {
   toggleManageSupplierInvoices: (id, manage_supplier_invoices) => api.patch(`/users/${id}/manage-supplier-invoices`, { manage_supplier_invoices }),
   toggleViewSupplierInvoices: (id, view_supplier_invoices) => api.patch(`/users/${id}/view-supplier-invoices`, { view_supplier_invoices }),
   toggleDeleteReceipts: (id, delete_receipts) => api.patch(`/users/${id}/delete-receipts`, { delete_receipts }),
+  toggleDeleteSavedPayouts: (id, delete_saved_payouts) => api.patch(`/users/${id}/delete-saved-payouts`, { delete_saved_payouts }),
 };
 
 // Payout recipient directory endpoints
@@ -66,6 +67,19 @@ export const recipientService = {
   create: (data) => api.post('/payout-contacts', data),
   update: (id, data) => api.patch(`/payout-contacts/${id}`, data),
   delete: (id) => api.delete(`/payout-contacts/${id}`),
+};
+
+// Saved payouts — payout forms held for later instead of being transacted.
+// claim → (PIN flow) → submit → resolve; release gives up a claim; delete discards (soft).
+export const savedPayoutService = {
+  getAll: () => api.get('/saved-payouts'),
+  create: (data) => api.post('/saved-payouts', data),
+  update: (id, data) => api.patch(`/saved-payouts/${id}`, data),
+  claim: (id) => api.post(`/saved-payouts/${id}/claim`),
+  release: (id) => api.post(`/saved-payouts/${id}/release`),
+  submit: (id, originator_conversation_id) => api.post(`/saved-payouts/${id}/submit`, { originator_conversation_id }),
+  resolve: (id, outcome, originator_conversation_id) => api.post(`/saved-payouts/${id}/resolve`, { outcome, originator_conversation_id }),
+  discard: (id) => api.delete(`/saved-payouts/${id}`),
 };
 
 // Imprest endpoints

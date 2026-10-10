@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { useAuth } from '../context/AuthContext';
-import { payoutService, imprestService, transactionService, imageService, projectService, recipientService } from '../services/api';
+import { payoutService, imprestService, transactionService, imageService, projectService, recipientService, savedPayoutService } from '../services/api';
 import RecipientPicker from '../components/RecipientPicker';
+import SavedPayouts, { LoadedDraftBanner, SaveDraftDialog } from '../components/SavedPayouts';
+import { DRAFT_VERSION, buildDraft, checkDraft } from '../utils/payoutDrafts';
 import PayoutVoucherPDF from '../components/PayoutVoucherPDF';
 import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Payouts.css';
@@ -98,6 +100,7 @@ const NAV_ITEMS = [
   { key: 'single',      icon: '📤', label: 'Single Payment'      },
   { key: 'b2b',         icon: '🏦', label: 'B2B Payment'         },
   { key: 'txn_payout',  icon: '💳', label: 'Transaction Payout'  },
+  { key: 'saved',       icon: '🔖', label: 'Saved'               },
   { key: 'contacts',    icon: '👥', label: 'Contacts'            },
   { key: 'history',     icon: '📋', label: 'History'             },
 ];
@@ -114,7 +117,7 @@ const getTxnTotals = (form) => {
 
 // ── Component ──────────────────────────────────────────────────
 const Payouts = () => {
-  const { user, canViewAllImprests, canEditContacts } = useAuth();
+  const { user, canViewAllImprests, canEditContacts, canDeleteSavedPayouts } = useAuth();
   const [view, setView] = useState('history');
 
   // ── Contacts (backend-backed recipient directory) ────────────
@@ -230,6 +233,19 @@ const Payouts = () => {
 
   // ── Server-sourced unrecorded txn_payouts (persistent, survives browser close) ──
   const [serverFailedTxns, setServerFailedTxns] = useState([]);
+
+  // ── Saved payouts (drafts held for later instead of transacting) ──
+  const [savedPayouts, setSavedPayouts]       = useState([]);
+  const [savedLoading, setSavedLoading]       = useState(true);
+  const [savedBusyId, setSavedBusyId]         = useState(null);
+  const [savedNotice, setSavedNotice]         = useState(null);   // { kind: 'success'|'warn', text }
+  // The draft currently filled into a form: { draft, warnings }. Paying that form uses it up.
+  const [loadedDraft, setLoadedDraft]         = useState(null);
+  const [draftError, setDraftError]           = useState('');
+  const [saveDialogType, setSaveDialogType]   = useState(null);   // payout type being saved, or null
+  const [savingDraft, setSavingDraft]         = useState(false);
+  const [saveDraftError, setSaveDraftError]   = useState('');
+  const settlingRef                           = useRef(false);
 
   // ── Retry modal ──────────────────────────────────────────────
   const [retryEntry, setRetryEntry]       = useState(null);
@@ -348,13 +364,239 @@ const Payouts = () => {
     } catch { /* silent — server entries are a recovery aid, not critical */ }
   };
 
-  useEffect(() => { fetchLedger(); fetchBalance(); fetchUnrecordedTxnPayouts(); }, []); // eslint-disable-line
+  // ── Saved payouts ────────────────────────────────────────────
+  const showSavedNotice = (kind, text, ms = 8000) => {
+    setSavedNotice({ kind, text });
+    if (ms) setTimeout(() => setSavedNotice(n => (n?.text === text ? null : n)), ms);
+  };
+
+  // Drafts whose PIN was accepted are "submitted" until Safaricom answers. Whoever has
+  // the list open settles them — this is what finishes a Single payment (which doesn't
+  // wait in the modal) and any payout whose browser was closed mid-flow.
+  const settleSubmittedDrafts = async (rows) => {
+    if (settlingRef.current) return;
+    const pending = rows.filter(r => r.status === 'submitted' && r.originator_conversation_id);
+    if (pending.length === 0) return;
+    settlingRef.current = true;
+    let changed = false;
+    try {
+      for (const r of pending) {
+        try {
+          const { data } = await payoutService.checkB2cStatus(r.originator_conversation_id);
+          const outcome = data.status === 'success' ? 'paid'
+            : (data.status === 'failed' || data.status === 'timeout') ? 'failed'
+            : null;
+          if (!outcome) continue;
+          await savedPayoutService.resolve(r.id, outcome, r.originator_conversation_id);
+          changed = true;
+          if (outcome === 'failed') {
+            showSavedNotice('warn', `Payment for saved payout "${r.name}" failed — it is back in Saved.`);
+          }
+        } catch { /* try again on the next refresh */ }
+      }
+    } finally {
+      settlingRef.current = false;
+    }
+    if (changed) fetchSavedPayouts(true);
+  };
+
+  const fetchSavedPayouts = async (silent = false) => {
+    try {
+      if (!silent) setSavedLoading(true);
+      const { data } = await savedPayoutService.getAll();
+      const rows = data.savedPayouts || [];
+      setSavedPayouts(rows);
+      settleSubmittedDrafts(rows);
+    } catch (err) {
+      console.error('Failed to load saved payouts:', err);
+    } finally {
+      if (!silent) setSavedLoading(false);
+    }
+  };
+
+  // Refresh whenever Saved is opened, so locks taken by other users show up.
+  useEffect(() => { if (view === 'saved') fetchSavedPayouts(true); }, [view]); // eslint-disable-line
+
+  // Keep checking while any draft is waiting on Safaricom.
+  useEffect(() => {
+    if (!savedPayouts.some(d => d.status === 'submitted')) return;
+    const t = setInterval(() => fetchSavedPayouts(true), 15000);
+    return () => clearInterval(t);
+  }, [savedPayouts]); // eslint-disable-line
+
+  const currentFormState = (type) => {
+    if (type === 'single') return single;
+    if (type === 'txn_payout') return txnPayout;
+    return { items: batchItems, phone: batchPhone };
+  };
+
+  const openSaveDialog = (type) => {
+    setSaveDraftError('');
+    setSaveDialogType(type);
+  };
+
+  const clearForm = (type) => {
+    if (type === 'single') setSingle({ contact: '', amount: '', description: '' });
+    if (type === 'txn_payout') {
+      setTxnPayout({ projectId: '', imprestId: '', contact: '', amount: '', description: '' });
+      setProjectSearch('');
+      setImprestSearch('');
+    }
+    if (type === 'batch_payout') { setBatchItems([]); setBatchPhone(''); setBatchSubmitError(''); }
+  };
+
+  // Saving a form that holds a loaded draft of the same type overwrites that draft.
+  const handleSaveDraft = async (name) => {
+    const type = saveDialogType;
+    const built = buildDraft(type, currentFormState(type), { projects, imprests, contacts });
+    if (built.error) { setSaveDraftError(built.error); return; }
+    const overwriting = loadedDraft?.draft.type === type ? loadedDraft.draft : null;
+    setSavingDraft(true);
+    setSaveDraftError('');
+    try {
+      const body = { name, form_data: built.form_data, form_version: DRAFT_VERSION, amount: built.amount };
+      if (overwriting) await savedPayoutService.update(overwriting.id, body);
+      else await savedPayoutService.create({ ...body, type });
+      setSaveDialogType(null);
+      clearForm(type);
+      if (overwriting) setLoadedDraft(null);
+      setDraftError('');
+      showSavedNotice('success', overwriting ? `Saved payout "${name}" updated.` : `Saved "${name}" for later.`);
+      fetchSavedPayouts(true);
+    } catch (err) {
+      setSaveDraftError(err.response?.data?.message || 'Failed to save. Please try again.');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const formHasData = (type) => {
+    if (type === 'single') return !!(single.contact || single.amount || single.description);
+    if (type === 'txn_payout') return !!(txnPayout.projectId || txnPayout.imprestId || txnPayout.contact || txnPayout.amount || txnPayout.description);
+    return batchItems.length > 0 || !!batchPhone;
+  };
+
+  const handleLoadDraft = async (draft) => {
+    if (formHasData(draft.type) && loadedDraft?.draft.id !== draft.id &&
+        !window.confirm('The form for this payout type already has details in it. Replace them with the saved payout?')) {
+      return;
+    }
+    setSavedBusyId(draft.id);
+    try {
+      const needsRefs = draft.type !== 'single';
+      const [projList, impList] = needsRefs
+        ? await Promise.all([ensureProjects({ fresh: true }), ensureImprests({ fresh: true })])
+        : [projects, imprests];
+      const { form, warnings } = checkDraft(draft, { projects: projList, imprests: impList, contacts });
+      if (!form) { showSavedNotice('warn', warnings.join(' ')); return; }
+
+      if (draft.type === 'single') {
+        setSingle(form);
+        setView('single');
+      } else if (draft.type === 'txn_payout') {
+        const { projectLabel, imprestLabel, ...fields } = form;
+        setTxnPayout(fields);
+        setProjectSearch(projectLabel);
+        setImprestSearch(imprestLabel);
+        setTxnMode('single');
+        setView('txn_payout');
+      } else {
+        setBatchItems(form.items);
+        setBatchPhone(form.phone);
+        setBatchSubmitError('');
+        setTxnMode('batch');
+        setView('txn_payout');
+      }
+      setLoadedDraft({ draft, warnings });
+      setDraftError('');
+    } finally {
+      setSavedBusyId(null);
+    }
+  };
+
+  const handleRenameDraft = async (draft, name) => {
+    setSavedBusyId(draft.id);
+    try {
+      await savedPayoutService.update(draft.id, { name });
+      if (loadedDraft?.draft.id === draft.id) {
+        setLoadedDraft(ld => ({ ...ld, draft: { ...ld.draft, name } }));
+      }
+      fetchSavedPayouts(true);
+      return null;
+    } catch (err) {
+      return err.response?.data?.message || 'Rename failed. Please try again.';
+    } finally {
+      setSavedBusyId(null);
+    }
+  };
+
+  const handleDiscardDraft = async (draft) => {
+    if (!window.confirm(`Discard saved payout "${draft.name}"? It will be removed from Saved.`)) return;
+    setSavedBusyId(draft.id);
+    try {
+      await savedPayoutService.discard(draft.id);
+      if (loadedDraft?.draft.id === draft.id) setLoadedDraft(null);
+      showSavedNotice('success', `Discarded "${draft.name}".`);
+    } catch (err) {
+      showSavedNotice('warn', err.response?.data?.message || 'Discard failed. Please try again.');
+    } finally {
+      setSavedBusyId(null);
+      fetchSavedPayouts(true);
+    }
+  };
+
+  const detachDraft = () => { setLoadedDraft(null); setDraftError(''); };
+
+  // Before requesting a PIN for a form that holds a loaded draft, lock the draft so
+  // nobody else can pay it at the same time. Returns the draft id, null when the form
+  // has no draft of this type, or false when the lock was refused (error shown).
+  const claimLoadedDraft = async (type) => {
+    if (!loadedDraft || loadedDraft.draft.type !== type) return null;
+    try {
+      await savedPayoutService.claim(loadedDraft.draft.id);
+      setDraftError('');
+      return loadedDraft.draft.id;
+    } catch (err) {
+      setDraftError(err.response?.data?.message || 'Could not reserve this saved payout. Please try again.');
+      fetchSavedPayouts(true);
+      return false;
+    }
+  };
+
+  const releaseDraft = (draftId) => {
+    if (!draftId) return;
+    savedPayoutService.release(draftId).catch(() => {}).finally(() => fetchSavedPayouts(true));
+  };
+
+  // PIN accepted — link the draft to the M-Pesa payment. Retried because if this is lost
+  // the claim lapses and the draft could be paid a second time.
+  const markDraftSubmitted = async (draftId, originatorConversationId) => {
+    if (!draftId) return;
+    const name = loadedDraft?.draft.id === draftId ? loadedDraft.draft.name : 'this payout';
+    if (originatorConversationId) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await savedPayoutService.submit(draftId, originatorConversationId);
+          fetchSavedPayouts(true);
+          return;
+        } catch {
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+    }
+    showSavedNotice('warn',
+      `Payment sent, but saved payout "${name}" could not be marked as used. Discard it from Saved so it isn't paid twice.`, 0);
+    fetchSavedPayouts(true);
+  };
+
+  useEffect(() => { fetchLedger(); fetchBalance(); fetchUnrecordedTxnPayouts(); fetchSavedPayouts(); }, []); // eslint-disable-line
 
   useTabRefresh('/payouts', () => {
     fetchLedger();
     fetchContacts(true);
     fetchBalance();
     fetchUnrecordedTxnPayouts();
+    fetchSavedPayouts(true);
   });
 
   // Persist failed txn ledger
@@ -401,46 +643,57 @@ const Payouts = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Load projects when Transaction Payout view is opened
-  useEffect(() => {
-    if (view !== 'txn_payout') return;
-    if (projects.length > 0) return;
-    setProjectsLoading(true);
-    projectService.getAll()
-      .then(({ data }) => setProjects(data.projects || []))
-      .catch(() => {})
-      .finally(() => setProjectsLoading(false));
-  }, [view]); // eslint-disable-line
+  // Projects / imprests are loaded on demand and cached. These return a promise of the
+  // list (null if the fetch failed) so a saved payout can wait for them before it is
+  // checked and filled in. `fresh` refetches, e.g. for up-to-date imprest balances.
+  const projectsPromiseRef = useRef(null);
+  const imprestsPromiseRef = useRef(null);
 
-  // Load imprests when Transaction Payout view is opened
-  useEffect(() => {
-    if (view !== 'txn_payout') return;
-    if (imprests.length > 0) return;
-    setImprestsLoading(true);
-    const load = async () => {
-      try {
+  const ensureProjects = ({ fresh = false } = {}) => {
+    if (fresh || !projectsPromiseRef.current) {
+      setProjectsLoading(true);
+      projectsPromiseRef.current = projectService.getAll()
+        .then(({ data }) => { const list = data.projects || []; setProjects(list); return list; })
+        .catch(() => { projectsPromiseRef.current = null; return null; })
+        .finally(() => setProjectsLoading(false));
+    }
+    return projectsPromiseRef.current;
+  };
+
+  const ensureImprests = ({ fresh = false } = {}) => {
+    if (fresh || !imprestsPromiseRef.current) {
+      setImprestsLoading(true);
+      const load = async () => {
         if (canViewAllImprests()) {
           const { data } = await imprestService.getAdminSummary();
-          setImprests((data.response || []).map(imp => ({
+          return (data.response || []).map(imp => ({
             id: imp.id,
             name: imp.imprestName,
             projectName: imp.projectName || imp.project?.name || null,
             remaining: (imp.allocated || 0) - (imp.usedAmount || 0),
-          })));
-        } else {
-          const { data } = await imprestService.getByUser(user.id);
-          setImprests((data.response || []).map(imp => ({
-            id: imp.id,
-            name: imp.name,
-            projectName: imp.projectName || imp.project?.name || null,
-            remaining: (imp.amount || 0) - (imp.totalTransactionPrice || 0),
-          })));
+          }));
         }
-      } catch { /* silent */ } finally {
-        setImprestsLoading(false);
-      }
-    };
-    load();
+        const { data } = await imprestService.getByUser(user.id);
+        return (data.response || []).map(imp => ({
+          id: imp.id,
+          name: imp.name,
+          projectName: imp.projectName || imp.project?.name || null,
+          remaining: (imp.amount || 0) - (imp.totalTransactionPrice || 0),
+        }));
+      };
+      imprestsPromiseRef.current = load()
+        .then(list => { setImprests(list); return list; })
+        .catch(() => { imprestsPromiseRef.current = null; return null; })
+        .finally(() => setImprestsLoading(false));
+    }
+    return imprestsPromiseRef.current;
+  };
+
+  // Load projects and imprests when Transaction Payout view is opened
+  useEffect(() => {
+    if (view !== 'txn_payout') return;
+    ensureProjects();
+    ensureImprests();
   }, [view]); // eslint-disable-line
 
   useEffect(() => { modalRef.current = modal; }, [modal]);
@@ -451,6 +704,17 @@ const Payouts = () => {
 
     setShowPollEscape(false);
     pollEscapeTimerRef.current = setTimeout(() => setShowPollEscape(true), 60000);
+
+    // Settle the saved payout this payment came from. A failed payment puts the draft
+    // back (the form still holds it, so the user can retry); a paid one is used up.
+    const settleModalDraft = (outcome) => {
+      const draftId = modalRef.current?.draftId;
+      if (!draftId) return;
+      savedPayoutService.resolve(draftId, outcome, ocid)
+        .catch(() => {})
+        .finally(() => fetchSavedPayouts(true));
+      if (outcome === 'paid') setLoadedDraft(null);
+    };
 
     const resolveImprestAndProceed = async (mpesaInfo) => {
       const { code: mpesaCode, phone: mpesaPhone, name: mpesaRecipientName } = mpesaInfo || {};
@@ -565,6 +829,7 @@ const Payouts = () => {
         if (data.status === 'success') {
           clearInterval(pollRef.current);
           fetchLedger(); // update ledger immediately on confirmed success
+          settleModalDraft('paid');
           await resolveImprestAndProceed({
             code: data.transactionReceipt || null,
             phone: data.partyB || null,
@@ -573,6 +838,7 @@ const Payouts = () => {
         } else if (data.status === 'failed' || data.status === 'timeout') {
           clearInterval(pollRef.current);
           fetchLedger();
+          settleModalDraft('failed');
           setPollingError(data.resultDesc || 'Payment failed or timed out by Safaricom.');
           setModalStep('failed');
         }
@@ -607,14 +873,16 @@ const Payouts = () => {
   const failedCount    = history.filter(h => h.status === 'failed' || h.status === 'expired').length;
 
   // ── Modal helpers ────────────────────────────────────────────
-  const openModal = (type, label, amount, payload, payoutId) => {
+  // draftId: the saved payout this payment uses up (already claimed), if any
+  const openModal = (type, label, amount, payload, payoutId, draftId = null) => {
     clearInterval(timerRef.current);
-    setModal({ id: Date.now().toString(), type, label, amount, payload, payoutId });
+    setModal({ id: Date.now().toString(), type, label, amount, payload, payoutId, draftId });
     setPin(''); setTimeLeft(PIN_TIMEOUT_SECS); setPinExpired(false); setPinError('');
   };
 
   const cancelModal = () => {
     clearInterval(timerRef.current);
+    releaseDraft(modal?.draftId);
     setModal(null); setPin('');
     fetchLedger();
   };
@@ -651,6 +919,7 @@ const Payouts = () => {
         setPollingError('');
         // authorise returns { success, result: { originatorConversationId, conversationId } }
         const originatorConversationId = authResponse?.data?.result?.originatorConversationId || null;
+        markDraftSubmitted(m.draftId, originatorConversationId);
         setOcid(originatorConversationId);
         setModalStep('polling');
         setSubmitting(false);
@@ -661,7 +930,15 @@ const Payouts = () => {
       setModal(null); setPin('');
       fetchLedger();
       if (m.type === 'payroll') { setXlsxRows([]); setPayrollName(''); setInlinePhones({}); }
-      if (m.type === 'single')  setSingle({ contact: '', amount: '', description: '' });
+      if (m.type === 'single') {
+        setSingle({ contact: '', amount: '', description: '' });
+        // A Single payment doesn't wait for Safaricom here — the draft settles in the
+        // background once the saved list sees the result (see settleSubmittedDrafts).
+        if (m.draftId) {
+          markDraftSubmitted(m.draftId, authResponse?.data?.result?.originatorConversationId || null);
+          setLoadedDraft(null);
+        }
+      }
       if (m.type === 'b2b')     setB2b({ paybillNumber: '', accountNumber: '', tillNumber: '', amount: '' });
       setView('history');
     } catch (err) {
@@ -822,6 +1099,9 @@ const Payouts = () => {
 
   const submitSingle = async () => {
     if (!single.contact.trim() || !single.amount || requesting) return;
+    setRequesting(true);
+    const draftId = await claimLoadedDraft('single');
+    if (draftId === false) { setRequesting(false); return; }
     const label = `Payment to ${single.contact}`;
     const amount = parseFloat(single.amount) || 0;
     const payload = {
@@ -830,11 +1110,11 @@ const Payouts = () => {
       remarks:     single.description || 'Payment',
       description: single.description,
     };
-    setRequesting(true);
     try {
       const { data } = await payoutService.request({ type: 'single', payload, label, amount, initiatedBy: user.name });
-      openModal('single', label, amount, { ...single }, data.payoutId);
+      openModal('single', label, amount, { ...single }, data.payoutId, draftId);
     } catch {
+      releaseDraft(draftId);
       alert('Failed to initiate payout. Please try again.');
     } finally {
       setRequesting(false);
@@ -886,6 +1166,8 @@ const Payouts = () => {
       imprestProject: selectedImprest?.projectName || selectedProject?.name || null,
     };
     setTxnRequesting(true);
+    const draftId = await claimLoadedDraft('txn_payout');
+    if (draftId === false) { setTxnRequesting(false); return; }
     try {
       const { data } = await payoutService.request({ type: 'txn_payout', payload, label, amount: amt, initiatedBy: user.name });
       setModalStep('pin');
@@ -893,8 +1175,9 @@ const Payouts = () => {
         ...txnPayout,
         project: selectedProject,
         imprest: selectedImprest || null,
-      }, data.payoutId);
+      }, data.payoutId, draftId);
     } catch {
+      releaseDraft(draftId);
       alert('Failed to initiate payout. Please try again.');
     } finally {
       setTxnRequesting(false);
@@ -1137,6 +1420,7 @@ const Payouts = () => {
 
   const submitBatchPayout = async () => {
     if (batchItems.length === 0) { setBatchSubmitError('Add at least one item.'); return; }
+    if (batchItems.some(i => i._issue)) { setBatchSubmitError('Remove the flagged items before paying.'); return; }
     if (!batchPhone.trim()) { setBatchSubmitError('Enter a phone number.'); return; }
     if (!isValidPhone(batchPhone)) { setBatchSubmitError('Enter a valid Kenyan mobile number.'); return; }
     if (batchRequesting) return;
@@ -1145,11 +1429,14 @@ const Payouts = () => {
     const payload = { phoneNumber: normalizePhone(batchPhone), amount: total, remarks: `Batch payout — ${batchItems.length} items` };
     setBatchRequesting(true);
     setBatchSubmitError('');
+    const draftId = await claimLoadedDraft('batch_payout');
+    if (draftId === false) { setBatchRequesting(false); return; }
     try {
       const { data } = await payoutService.request({ type: 'batch_payout', payload, label, amount: total, initiatedBy: user.name });
       setModalStep('pin');
-      openModal('batch_payout', label, total, { batchItems: [...batchItems], contact: batchPhone }, data.payoutId);
+      openModal('batch_payout', label, total, { batchItems: [...batchItems], contact: batchPhone }, data.payoutId, draftId);
     } catch {
+      releaseDraft(draftId);
       setBatchSubmitError('Failed to initiate payout. Please try again.');
     } finally {
       setBatchRequesting(false);
@@ -1237,6 +1524,28 @@ const Payouts = () => {
               <div className="po-success-banner">
                 <span>✓</span> {txnSuccess}
               </div>
+            )}
+            {savedNotice && (
+              <div className={savedNotice.kind === 'warn' ? 'po-warn-banner' : 'po-success-banner'}>
+                <span>{savedNotice.kind === 'warn' ? '⚠' : '✓'}</span> {savedNotice.text}
+                {savedNotice.kind === 'warn' && (
+                  <button className="po-link-btn" style={{ marginLeft: 8 }} onClick={() => setSavedNotice(null)}>Dismiss</button>
+                )}
+              </div>
+            )}
+
+            {/* ── Saved payouts ───────────────────────────── */}
+            {view === 'saved' && (
+              <SavedPayouts
+                drafts={savedPayouts}
+                loading={savedLoading}
+                userId={user.id}
+                canDiscard={canDeleteSavedPayouts()}
+                busyId={savedBusyId}
+                onLoad={handleLoadDraft}
+                onRename={handleRenameDraft}
+                onDiscard={handleDiscardDraft}
+              />
             )}
 
             {view === 'history' && (
@@ -1570,6 +1879,9 @@ const Payouts = () => {
                   </div>
                 </div>
                 <div className="po-form narrow">
+                  {loadedDraft?.draft.type === 'single' && (
+                    <LoadedDraftBanner draft={loadedDraft.draft} warnings={loadedDraft.warnings} error={draftError} onDetach={detachDraft} />
+                  )}
                   <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
                   <div className="po-field">
                     <label>Contact / Phone Number</label>
@@ -1600,6 +1912,10 @@ const Payouts = () => {
                     <button className="po-initiate-btn" onClick={submitSingle}
                       disabled={!single.contact.trim() || !single.amount || requesting}>
                       {requesting ? 'Sending SMS…' : 'Initiate Payment'}
+                    </button>
+                    <button className="po-save-draft-btn" onClick={() => openSaveDialog('single')}
+                      disabled={!single.contact.trim() || !(parseFloat(single.amount) > 0) || requesting}>
+                      {loadedDraft?.draft.type === 'single' ? 'Update saved payout' : 'Save for later'}
                     </button>
                   </div>
                 </div>
@@ -1689,6 +2005,9 @@ const Payouts = () => {
                 </div>
 
                 {txnMode === 'single' && <div className="po-form narrow">
+                  {loadedDraft?.draft.type === 'txn_payout' && (
+                    <LoadedDraftBanner draft={loadedDraft.draft} warnings={loadedDraft.warnings} error={draftError} onDetach={detachDraft} />
+                  )}
                   <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
 
                   {/* Step 1 — Select Project */}
@@ -1846,6 +2165,10 @@ const Payouts = () => {
                     >
                       {txnRequesting ? 'Sending SMS…' : 'Initiate Transaction Payout'}
                     </button>
+                    <button className="po-save-draft-btn" onClick={() => openSaveDialog('txn_payout')}
+                      disabled={!txnPayoutReady || !(parseFloat(txnPayout.amount) > 0) || txnRequesting}>
+                      {loadedDraft?.draft.type === 'txn_payout' ? 'Update saved payout' : 'Save for later'}
+                    </button>
                     {!txnPayout.projectId && !txnPayout.imprestId && (
                       <span className="po-hint">Select a project or imprest to continue</span>
                     )}
@@ -1853,6 +2176,12 @@ const Payouts = () => {
                 </div>}
 
                 {/* ── Batch mode ──────────────────────────────── */}
+                {txnMode === 'batch' && loadedDraft?.draft.type === 'batch_payout' && (
+                  <div className="po-batch-draft-banner">
+                    <LoadedDraftBanner draft={loadedDraft.draft} warnings={loadedDraft.warnings} error={draftError} onDetach={detachDraft} />
+                  </div>
+                )}
+
                 {txnMode === 'batch' && (
                   <div className="po-batch-layout">
 
@@ -2004,11 +2333,11 @@ const Payouts = () => {
                             </thead>
                             <tbody>
                               {batchItems.map((item, idx) => (
-                                <tr key={item.id}>
-                                  <td className="td-mono">{idx + 1}</td>
+                                <tr key={item.id} className={item._issue ? 'po-batch-row-issue' : ''} title={item._issue || undefined}>
+                                  <td className="td-mono">{item._issue ? '⚠' : idx + 1}</td>
                                   <td>{item.projectName || '—'}</td>
                                   <td>{item.imprestName || <span className="po-batch-expenses">Expenses</span>}</td>
-                                  <td className="td-desc">{item.description}</td>
+                                  <td className="td-desc">{item.description}{item._issue && <div className="po-batch-issue">{item._issue}</div>}</td>
                                   <td className="td-amount">{fmtCur(item.amount)}</td>
                                   <td>
                                     <button
@@ -2053,6 +2382,14 @@ const Payouts = () => {
                           disabled={batchRequesting || batchItems.length === 0}
                         >
                           {batchRequesting ? 'Sending SMS…' : `Initiate Batch Payout${batchItems.length > 0 ? ` · ${fmtCur(batchItems.reduce((s, i) => s + i.amount, 0))}` : ''}`}
+                        </button>
+                        <button
+                          className="po-save-draft-btn"
+                          style={{ width: '100%', marginTop: 8 }}
+                          onClick={() => openSaveDialog('batch_payout')}
+                          disabled={batchRequesting || batchItems.length === 0 || batchItems.some(i => i._issue) || !isValidPhone(batchPhone)}
+                        >
+                          {loadedDraft?.draft.type === 'batch_payout' ? 'Update saved payout' : 'Save for later'}
                         </button>
                       </div>
                     </div>
@@ -2181,6 +2518,9 @@ const Payouts = () => {
                 )}
                 {item.key === 'contacts' && contacts.length > 0 && (
                   <span className="po-nav-count">{contacts.length}</span>
+                )}
+                {item.key === 'saved' && savedPayouts.length > 0 && (
+                  <span className="po-nav-count">{savedPayouts.length}</span>
                 )}
                 {item.key === 'txn_payout' && failedTxns.length > 0 && (
                   <span className="po-nav-count alert">{failedTxns.length}</span>
@@ -2440,13 +2780,26 @@ const Payouts = () => {
                 <div className="pin-expired-body">
                   <p>The 10-minute approval window has closed. This payment has been cancelled.</p>
                   <p>Please initiate a new payment if you still wish to proceed.</p>
-                  <button className="pin-cancel-btn" onClick={() => { setModal(null); setPin(''); setModalStep('pin'); }}>Close</button>
+                  <button className="pin-cancel-btn" onClick={() => { releaseDraft(modal?.draftId); setModal(null); setPin(''); setModalStep('pin'); }}>Close</button>
                 </div>
               )}
             </div>
           </div>
         </div>
       )}
+      {/* ── Save for later ──────────────────────────────────── */}
+      {saveDialogType && (
+        <SaveDraftDialog
+          overwriting={loadedDraft?.draft.type === saveDialogType ? loadedDraft.draft : null}
+          defaultName={loadedDraft?.draft.type === saveDialogType ? loadedDraft.draft.name : ''}
+          userName={user.name}
+          saving={savingDraft}
+          error={saveDraftError}
+          onCancel={() => setSaveDialogType(null)}
+          onSave={handleSaveDraft}
+        />
+      )}
+
       {/* ── Retry Modal (Action Required) ──────────────────── */}
       {retryEntry && (
         <div className="pin-overlay">

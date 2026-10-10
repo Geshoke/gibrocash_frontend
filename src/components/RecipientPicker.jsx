@@ -1,9 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 
+const digits = (p) => {
+  let d = String(p || '').replace(/\D/g, '');
+  if (/^0[17]/.test(d)) d = '254' + d.slice(1);
+  if (/^[17]\d{8}$/.test(d)) d = '254' + d;
+  return d;
+};
+
 const RecipientPicker = ({ value, onChange, recipients = [], placeholder, disabled }) => {
   const [open, setOpen]               = useState(false);
   const [search, setSearch]           = useState('');
-  const [selectedName, setSelectedName] = useState('');
   const wrapRef  = useRef(null);
   const searchRef = useRef(null);
 
@@ -20,11 +26,11 @@ const RecipientPicker = ({ value, onChange, recipients = [], placeholder, disabl
     if (open && searchRef.current) searchRef.current.focus();
   }, [open]);
 
-  // Clear selected name when the user manually edits the phone field
-  const handleInputChange = (e) => {
-    onChange(e.target.value);
-    setSelectedName('');
-  };
+  const handleInputChange = (e) => onChange(e.target.value);
+
+  // Derived from the current value (not remembered from the last pick), so the name
+  // stays right when the parent fills or clears the field — e.g. loading a saved payout.
+  const selectedName = value ? recipients.find(r => digits(r.phone) === digits(value))?.name || '' : '';
 
   const toggleOpen = () => {
     setSearch('');
@@ -33,7 +39,6 @@ const RecipientPicker = ({ value, onChange, recipients = [], placeholder, disabl
 
   const selectRecipient = (r) => {
     onChange(r.phone);
-    setSelectedName(r.name);
     setSearch('');
     setOpen(false);
   };
