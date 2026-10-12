@@ -59,6 +59,7 @@ export const userService = {
   toggleViewSupplierInvoices: (id, view_supplier_invoices) => api.patch(`/users/${id}/view-supplier-invoices`, { view_supplier_invoices }),
   toggleDeleteReceipts: (id, delete_receipts) => api.patch(`/users/${id}/delete-receipts`, { delete_receipts }),
   toggleDeleteSavedPayouts: (id, delete_saved_payouts) => api.patch(`/users/${id}/delete-saved-payouts`, { delete_saved_payouts }),
+  toggleCreateImprests: (id, create_imprests) => api.patch(`/users/${id}/create-imprests`, { create_imprests }),
 };
 
 // Payout recipient directory endpoints
@@ -84,7 +85,6 @@ export const savedPayoutService = {
 
 // Imprest endpoints
 export const imprestService = {
-  create: (data) => api.post('/create_imprest', data),
   getByUser: (userID) => api.get(`/getImprests/${userID}`),
   getAllNames: () => api.get('/imprests/all-names'),
   getAdminSummary: () => api.get('/adminAllImprestSummation'),
@@ -147,6 +147,8 @@ export const projectService = {
   getById: (id) => api.get(`/projects/${id}`),
   create: (data) => api.post('/create_project', data),
   update: (id, data) => api.patch(`/projects/${id}`, data),
+  // Body: { name, amount, source, assigneeIds: [userId, ...], proposalId? } — needs create_imprests
+  createImprest: (id, data) => api.post(`/projects/${id}/imprests`, data),
   assignImprest: (imprestId, projectId) =>
     api.patch(`/imprest/${imprestId}/assign-project`, { project_id: projectId }),
   getComments: (id) => api.get(`/projects/${id}/comments`),

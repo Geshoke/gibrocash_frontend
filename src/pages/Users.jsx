@@ -170,6 +170,16 @@ const Users = () => {
     }
   };
 
+  const handleToggleCreateImprests = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, create_imprests: value } : u));
+    try {
+      await userService.toggleCreateImprests(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update create imprests:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, create_imprests: !value } : u));
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-KE', {
       year: 'numeric',
@@ -228,6 +238,7 @@ const Users = () => {
                   <th>Manage Supplier Invoices</th>
                   <th>Delete Receipts</th>
                   <th>Delete Saved Payouts</th>
+                  <th>Create Imprests</th>
                 </tr>
               </thead>
               <tbody>
@@ -398,6 +409,17 @@ const Users = () => {
                           type="checkbox"
                           checked={u.delete_saved_payouts ?? false}
                           onChange={e => handleToggleDeleteSavedPayouts(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.create_imprests ?? false}
+                          onChange={e => handleToggleCreateImprests(u, e.target.checked)}
                           disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />

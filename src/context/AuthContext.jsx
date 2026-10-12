@@ -53,6 +53,7 @@ export const AuthProvider = ({ children }) => {
       view_supplier_invoices: profile?.view_supplier_invoices ?? false,
       delete_receipts: profile?.delete_receipts ?? false,
       delete_saved_payouts: profile?.delete_saved_payouts ?? false,
+      create_imprests: profile?.create_imprests ?? false,
     };
 
     localStorage.setItem('user', JSON.stringify(userObj));
@@ -127,6 +128,10 @@ export const AuthProvider = ({ children }) => {
     return user?.payout === true && user?.delete_saved_payouts === true;
   };
 
+  const canCreateImprests = () => {
+    return user?.create_imprests === true;
+  };
+
   const value = {
     user,
     login,
@@ -146,6 +151,7 @@ export const AuthProvider = ({ children }) => {
     canViewSupplierInvoices,
     canDeleteReceipts,
     canDeleteSavedPayouts,
+    canCreateImprests,
     isAuthenticated: !!user,
     loading,
   };

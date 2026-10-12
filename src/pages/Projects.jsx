@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { projectService, transactionService, categoryService, imageService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTabRefresh } from '../hooks/useTabRefresh';
+import CreateImprestModal from '../components/CreateImprestModal';
 import './Projects.css';
 
 const Projects = () => {
-  const { user, canViewAllImprests, canViewProjectComments, canManageProjects } = useAuth();
+  const { user, canViewAllImprests, canViewProjectComments, canManageProjects, canCreateImprests } = useAuth();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectDetail, setProjectDetail] = useState(null);
@@ -34,6 +35,7 @@ const Projects = () => {
 
   // Create/edit project modal
   const [projectModalMode, setProjectModalMode] = useState(null); // null | 'create' | 'edit'
+  const [createImprestOpen, setCreateImprestOpen] = useState(false);
   const [projectForm, setProjectForm] = useState({ name: '', description: '' });
   const [savingProject, setSavingProject] = useState(false);
   const [projectFormError, setProjectFormError] = useState('');
@@ -193,6 +195,17 @@ const Projects = () => {
       setProjectFormError(err.response?.data?.message || 'Failed to save project.');
     } finally {
       setSavingProject(false);
+    }
+  };
+
+  const handleImprestCreated = async () => {
+    setCreateImprestOpen(false);
+    if (!selectedProject) return;
+    try {
+      const [detailRes] = await Promise.all([projectService.getById(selectedProject.id), fetchProjects(true)]);
+      setProjectDetail(detailRes.data.project);
+    } catch (err) {
+      console.error('Failed to refresh project after creating imprest:', err);
     }
   };
 
@@ -538,7 +551,14 @@ const Projects = () => {
                 )}
 
                 <div className="imprests-section">
-                  <h3>Imprest Accounts ({(projectDetail.imprests || []).length})</h3>
+                  <div className="imprests-section-head">
+                    <h3>Imprest Accounts ({(projectDetail.imprests || []).length})</h3>
+                    {canCreateImprests() && (
+                      <button className="edit-project-btn" onClick={() => setCreateImprestOpen(true)}>
+                        + New Imprest
+                      </button>
+                    )}
+                  </div>
 
                   {(projectDetail.imprests || []).length === 0 ? (
                     <p className="no-data-inline">No imprests linked to this project.</p>
@@ -869,6 +889,15 @@ const Projects = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {createImprestOpen && selectedProject && (
+        <CreateImprestModal
+          project={{ id: selectedProject.id, name: projectDetail?.name || selectedProject.name }}
+          currentUserId={user.id}
+          onClose={() => setCreateImprestOpen(false)}
+          onCreated={handleImprestCreated}
+        />
       )}
 
       {/* Create/Edit Project Modal */}

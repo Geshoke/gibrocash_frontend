@@ -142,6 +142,13 @@ html.dark .detail-summary .summary-card.balance { background: #1a2a3a; border-co
 html.dark .detail-summary .label     { color: #9ca3af; }
 html.dark .detail-summary .amount    { color: #e2e8f0; }
 html.dark .imprests-section h3       { color: #9ca3af; border-bottom-color: #374151; }
+html.dark .imprests-section-head      { border-bottom-color: #374151; }
+html.dark .modal-field select         { background: #1f2937; color: #e5e7eb; border-color: #4b5563; }
+html.dark .ci-user-list               { border-color: #374151; }
+html.dark .ci-user                    { border-bottom-color: #374151; }
+html.dark .ci-user:hover              { background: #273244; }
+html.dark .ci-user-name               { color: #e5e7eb; }
+html.dark .ci-chip                    { background: #1e3a5f; border-color: #2c5282; color: #bee3f8; }
 html.dark .imprest-block             { background: #252f3f; border-color: #374151; }
 html.dark .imprest-block-title h4    { color: #90cdf4; }
 html.dark .imprest-assignees         { color: #6b7280; }
