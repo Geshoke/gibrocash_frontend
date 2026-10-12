@@ -54,6 +54,14 @@ No test framework is currently configured.
 ### Currency/Locale
 - All amounts formatted as Kenyan Shillings (KES) using `Intl.NumberFormat('en-KE')`
 
+## Versioning
+
+The app version lives in `src/version.js` (`MAJOR.MINOR.PATCH`, shown in the sidebar).
+
+- **Patch** — bumped automatically by the local `.git/hooks/pre-push` hook on every push (it amends the last commit). Don't bump it by hand.
+- **Minor** — when a change touches **both this frontend and the backend** (`GibroCash_node`), bump the minor number and reset patch to 0 in the frontend commit (e.g. `1.2.27` → `1.3.0`). The pre-push hook then makes it `1.3.1` on push; that's expected.
+- Frontend-only changes leave the minor number alone.
+
 ## Editing Rules
 
 **Always read before editing.**
