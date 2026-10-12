@@ -117,7 +117,7 @@ const getTxnTotals = (form) => {
 
 // ── Component ──────────────────────────────────────────────────
 const Payouts = () => {
-  const { user, canViewAllImprests, canEditContacts, canDeleteSavedPayouts } = useAuth();
+  const { user, canEditContacts, canDeleteSavedPayouts } = useAuth();
   const [view, setView] = useState('history');
 
   // ── Contacts (backend-backed recipient directory) ────────────
@@ -184,29 +184,23 @@ const Payouts = () => {
   const projectRef                          = useRef(null);
 
   // ── Transaction Payout ───────────────────────────────────────
-  const [imprests, setImprests]             = useState([]);
-  const [imprestsLoading, setImprestsLoading] = useState(false);
-  const [txnPayout, setTxnPayout]           = useState({ projectId: '', imprestId: '', contact: '', amount: '', description: '' });
-  const [imprestSearch, setImprestSearch]   = useState('');
-  const [imprestOpen, setImprestOpen]       = useState(false);
-  const imprestRef                          = useRef(null);
+  // Transaction payouts are always recorded in the project's Expenses imprest. Choosing a
+  // specific imprest was removed: those payouts raised used without raising allocated.
+  const [txnPayout, setTxnPayout]           = useState({ projectId: '', contact: '', amount: '', description: '' });
   const [txnRequesting, setTxnRequesting]   = useState(false);
   const [txnSuccess, setTxnSuccess]         = useState('');
 
   // ── Batch Payout ─────────────────────────────────────────────
   const [txnMode, setTxnMode]                       = useState('single');
   const [batchItems, setBatchItems]                 = useState([]);
-  const [batchForm, setBatchForm]                   = useState({ projectId: '', projectName: '', imprestId: '', imprestName: '', amount: '', description: '' });
+  const [batchForm, setBatchForm]                   = useState({ projectId: '', projectName: '', amount: '', description: '' });
   const [batchPhone, setBatchPhone]                 = useState('');
   const [batchRequesting, setBatchRequesting]       = useState(false);
   const [batchItemError, setBatchItemError]         = useState('');
   const [batchSubmitError, setBatchSubmitError]     = useState('');
   const [batchProjectSearch, setBatchProjectSearch] = useState('');
   const [batchProjectOpen, setBatchProjectOpen]     = useState(false);
-  const [batchImprestSearch, setBatchImprestSearch] = useState('');
-  const [batchImprestOpen, setBatchImprestOpen]     = useState(false);
   const batchProjectRef                             = useRef(null);
-  const batchImprestRef                             = useRef(null);
 
   // ── PIN modal step 2 — record transaction ───────────────────
   const [modalStep, setModalStep]         = useState('pin'); // 'pin' | 'polling' | 'record' | 'failed'
@@ -438,9 +432,8 @@ const Payouts = () => {
   const clearForm = (type) => {
     if (type === 'single') setSingle({ contact: '', amount: '', description: '' });
     if (type === 'txn_payout') {
-      setTxnPayout({ projectId: '', imprestId: '', contact: '', amount: '', description: '' });
+      setTxnPayout({ projectId: '', contact: '', amount: '', description: '' });
       setProjectSearch('');
-      setImprestSearch('');
     }
     if (type === 'batch_payout') { setBatchItems([]); setBatchPhone(''); setBatchSubmitError(''); }
   };
@@ -448,7 +441,7 @@ const Payouts = () => {
   // Saving a form that holds a loaded draft of the same type overwrites that draft.
   const handleSaveDraft = async (name) => {
     const type = saveDialogType;
-    const built = buildDraft(type, currentFormState(type), { projects, imprests, contacts });
+    const built = buildDraft(type, currentFormState(type), { projects, contacts });
     if (built.error) { setSaveDraftError(built.error); return; }
     const overwriting = loadedDraft?.draft.type === type ? loadedDraft.draft : null;
     setSavingDraft(true);
@@ -472,7 +465,7 @@ const Payouts = () => {
 
   const formHasData = (type) => {
     if (type === 'single') return !!(single.contact || single.amount || single.description);
-    if (type === 'txn_payout') return !!(txnPayout.projectId || txnPayout.imprestId || txnPayout.contact || txnPayout.amount || txnPayout.description);
+    if (type === 'txn_payout') return !!(txnPayout.projectId || txnPayout.contact || txnPayout.amount || txnPayout.description);
     return batchItems.length > 0 || !!batchPhone;
   };
 
@@ -483,21 +476,17 @@ const Payouts = () => {
     }
     setSavedBusyId(draft.id);
     try {
-      const needsRefs = draft.type !== 'single';
-      const [projList, impList] = needsRefs
-        ? await Promise.all([ensureProjects({ fresh: true }), ensureImprests({ fresh: true })])
-        : [projects, imprests];
-      const { form, warnings } = checkDraft(draft, { projects: projList, imprests: impList, contacts });
+      const projList = draft.type !== 'single' ? await ensureProjects({ fresh: true }) : projects;
+      const { form, warnings } = checkDraft(draft, { projects: projList, contacts });
       if (!form) { showSavedNotice('warn', warnings.join(' ')); return; }
 
       if (draft.type === 'single') {
         setSingle(form);
         setView('single');
       } else if (draft.type === 'txn_payout') {
-        const { projectLabel, imprestLabel, ...fields } = form;
+        const { projectLabel, ...fields } = form;
         setTxnPayout(fields);
         setProjectSearch(projectLabel);
-        setImprestSearch(imprestLabel);
         setTxnMode('single');
         setView('txn_payout');
       } else {
@@ -615,17 +604,6 @@ const Payouts = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Close imprest dropdown on outside click
-  useEffect(() => {
-    const handler = (e) => {
-      if (imprestRef.current && !imprestRef.current.contains(e.target)) {
-        setImprestOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
   // Close batch dropdowns on outside click
   useEffect(() => {
     const handler = (e) => {
@@ -635,19 +613,9 @@ const Payouts = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  useEffect(() => {
-    const handler = (e) => {
-      if (batchImprestRef.current && !batchImprestRef.current.contains(e.target)) setBatchImprestOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  // Projects / imprests are loaded on demand and cached. These return a promise of the
-  // list (null if the fetch failed) so a saved payout can wait for them before it is
-  // checked and filled in. `fresh` refetches, e.g. for up-to-date imprest balances.
+  // Projects are loaded on demand and cached. This returns a promise of the list (null if
+  // the fetch failed) so a saved payout can wait for it before it is checked and filled in.
   const projectsPromiseRef = useRef(null);
-  const imprestsPromiseRef = useRef(null);
 
   const ensureProjects = ({ fresh = false } = {}) => {
     if (fresh || !projectsPromiseRef.current) {
@@ -660,41 +628,10 @@ const Payouts = () => {
     return projectsPromiseRef.current;
   };
 
-  const ensureImprests = ({ fresh = false } = {}) => {
-    if (fresh || !imprestsPromiseRef.current) {
-      setImprestsLoading(true);
-      const load = async () => {
-        if (canViewAllImprests()) {
-          const { data } = await imprestService.getAdminSummary();
-          return (data.response || []).map(imp => ({
-            id: imp.id,
-            name: imp.imprestName,
-            projectName: imp.projectName || imp.project?.name || null,
-            remaining: (imp.allocated || 0) - (imp.usedAmount || 0),
-          }));
-        }
-        const { data } = await imprestService.getByUser(user.id);
-        return (data.response || []).map(imp => ({
-          id: imp.id,
-          name: imp.name,
-          projectName: imp.projectName || imp.project?.name || null,
-          remaining: (imp.amount || 0) - (imp.totalTransactionPrice || 0),
-        }));
-      };
-      imprestsPromiseRef.current = load()
-        .then(list => { setImprests(list); return list; })
-        .catch(() => { imprestsPromiseRef.current = null; return null; })
-        .finally(() => setImprestsLoading(false));
-    }
-    return imprestsPromiseRef.current;
-  };
-
-  // Load projects and imprests when Transaction Payout view is opened
+  // Load projects when Transaction Payout view is opened
   useEffect(() => {
-    if (view !== 'txn_payout') return;
-    ensureProjects();
-    ensureImprests();
-  }, [view]); // eslint-disable-line
+    if (view === 'txn_payout') ensureProjects();
+  }, [view]);
 
   useEffect(() => { modalRef.current = modal; }, [modal]);
 
@@ -1147,10 +1084,9 @@ const Payouts = () => {
 
   // ── Transaction Payout handlers ──────────────────────────────
   const submitTxnPayout = async () => {
-    const { projectId, imprestId, contact, amount, description } = txnPayout;
-    if ((!projectId && !imprestId) || !contact.trim() || !amount || txnRequesting) return;
-    const selectedImprest = imprestId ? imprests.find(i => String(i.id) === String(imprestId)) : null;
-    const selectedProject = projectId ? projects.find(p => p.id === projectId) : null;
+    const { projectId, contact, amount, description } = txnPayout;
+    if (!projectId || !contact.trim() || !amount || txnRequesting) return;
+    const selectedProject = projects.find(p => p.id === projectId) || null;
     const label  = `Payment to ${contact}`;
     const amt    = parseFloat(amount) || 0;
     const payload = {
@@ -1159,11 +1095,11 @@ const Payouts = () => {
       remarks:        description || 'Transaction Payout',
       description,
       // stored server-side so the transaction can be recovered if the browser closes
-      imprestId:      selectedImprest?.id         || null,
-      projectId:      selectedProject?.id         || null,
+      imprestId:      null,
+      projectId:      selectedProject?.id   || null,
       userId:         user.id,
-      imprestName:    selectedImprest?.name        || null,
-      imprestProject: selectedImprest?.projectName || selectedProject?.name || null,
+      imprestName:    null,
+      imprestProject: selectedProject?.name || null,
     };
     setTxnRequesting(true);
     const draftId = await claimLoadedDraft('txn_payout');
@@ -1174,7 +1110,7 @@ const Payouts = () => {
       openModal('txn_payout', label, amt, {
         ...txnPayout,
         project: selectedProject,
-        imprest: selectedImprest || null,
+        imprest: null,
       }, data.payoutId, draftId);
     } catch {
       releaseDraft(draftId);
@@ -1241,7 +1177,7 @@ const Payouts = () => {
       }
       setModal(null);
       setModalStep('pin');
-      setTxnPayout({ projectId: '', imprestId: '', contact: '', amount: '', description: '' });
+      setTxnPayout({ projectId: '', contact: '', amount: '', description: '' });
       setProjectSearch('');
       setTxnForm({ item: '', vatEnabled: false });
       setTxnImageFile(null);
@@ -1398,23 +1334,22 @@ const Payouts = () => {
     }
   };
 
-  const txnPayoutReady = (txnPayout.projectId || txnPayout.imprestId) && txnPayout.contact.trim() && txnPayout.amount;
+  const txnPayoutReady = txnPayout.projectId && txnPayout.contact.trim() && txnPayout.amount;
 
   // ── Batch payout handlers ────────────────────────────────────
   const addBatchItem = () => {
-    const { projectId, projectName, imprestId, imprestName, amount, description } = batchForm;
-    if (!projectId && !imprestId) { setBatchItemError('Select a project or imprest.'); return; }
+    const { projectId, projectName, amount, description } = batchForm;
+    if (!projectId) { setBatchItemError('Select a project.'); return; }
     if (!amount || parseFloat(amount) <= 0) { setBatchItemError('Enter a valid amount.'); return; }
     if (!description.trim()) { setBatchItemError('Enter a description.'); return; }
     setBatchItems(prev => [...prev, {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      projectId, projectName, imprestId, imprestName,
+      projectId, projectName, imprestId: null, imprestName: null,
       amount: parseFloat(amount),
       description: description.trim(),
     }]);
-    setBatchForm({ projectId: '', projectName: '', imprestId: '', imprestName: '', amount: '', description: '' });
+    setBatchForm({ projectId: '', projectName: '', amount: '', description: '' });
     setBatchProjectSearch('');
-    setBatchImprestSearch('');
     setBatchItemError('');
   };
 
@@ -1995,7 +1930,7 @@ const Payouts = () => {
                 <div className="po-panel-header">
                   <div>
                     <h2>Transaction Payout</h2>
-                    <p>Send a payment and record it against a project or imprest. Director PIN required.</p>
+                    <p>Send a payment and record it in a project's Expenses account. Director PIN required.</p>
                   </div>
                 </div>
 
@@ -2056,70 +1991,13 @@ const Payouts = () => {
                         )}
                       </>
                     )}
-                    {txnPayout.projectId && !txnPayout.imprestId && (
-                      <p className="po-txp-hint">No imprest selected — expense will be recorded in the project's Expenses account.</p>
+                    {txnPayout.projectId && (
+                      <p className="po-txp-hint">The expense will be recorded in this project's Expenses account.</p>
                     )}
                   </div>
 
-                  {/* Step 2 — Select Imprest (optional) */}
-                  <div className="po-txp-section-label">Step 2 — Select Imprest <span className="po-txp-optional">(optional)</span></div>
-                  <div className="po-field" ref={imprestRef} style={{ position: 'relative' }}>
-                    <label>Imprest Account</label>
-                    {imprestsLoading ? (
-                      <div className="po-txp-loading">Loading imprests…</div>
-                    ) : (
-                      <>
-                        <input
-                          type="text"
-                          className="po-txp-search"
-                          placeholder="Search imprest… (leave blank to use project Expenses)"
-                          value={imprestSearch}
-                          onFocus={() => setImprestOpen(true)}
-                          onChange={e => {
-                            setImprestSearch(e.target.value);
-                            setImprestOpen(true);
-                            if (txnPayout.imprestId) setTxnPayout(p => ({ ...p, imprestId: '' }));
-                          }}
-                        />
-                        {imprestOpen && (
-                          <div className="po-txp-dropdown">
-                            {imprests
-                              .filter(imp => {
-                                const q = imprestSearch.toLowerCase();
-                                return (
-                                  imp.name.toLowerCase().includes(q) ||
-                                  (imp.projectName || '').toLowerCase().includes(q)
-                                );
-                              })
-                              .map(imp => (
-                                <div
-                                  key={imp.id}
-                                  className={`po-txp-option${String(txnPayout.imprestId) === String(imp.id) ? ' selected' : ''}`}
-                                  onMouseDown={() => {
-                                    setTxnPayout(p => ({ ...p, imprestId: imp.id }));
-                                    setImprestSearch(`${imp.name}${imp.projectName ? ` · ${imp.projectName}` : ''}`);
-                                    setImprestOpen(false);
-                                  }}
-                                >
-                                  <div className="po-txp-opt-name">{imp.name}{imp.projectName ? <span className="po-txp-opt-proj"> · {imp.projectName}</span> : ''}</div>
-                                  <div className="po-txp-opt-bal">{fmtCur(imp.remaining)}</div>
-                                </div>
-                              ))
-                            }
-                            {imprests.filter(imp => {
-                              const q = imprestSearch.toLowerCase();
-                              return imp.name.toLowerCase().includes(q) || (imp.projectName || '').toLowerCase().includes(q);
-                            }).length === 0 && (
-                              <div className="po-txp-no-results">No imprests match your search</div>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  {/* Step 3 — Payment details */}
-                  <div className="po-txp-section-label">Step 3 — Payment Details</div>
+                  {/* Step 2 — Payment details */}
+                  <div className="po-txp-section-label">Step 2 — Payment Details</div>
                   <div className="po-field">
                     <label>Recipient Phone Number</label>
                     <RecipientPicker
@@ -2147,13 +2025,10 @@ const Payouts = () => {
                     />
                   </div>
 
-                  {txnPayout.contact && txnPayout.amount && (txnPayout.projectId || txnPayout.imprestId) && (
+                  {txnPayout.contact && txnPayout.amount && txnPayout.projectId && (
                     <div className="po-preview">
                       Sending <strong>{fmtCur(txnPayout.amount)}</strong> to <strong>{txnPayout.contact}</strong>
-                      {txnPayout.imprestId
-                        ? <> — recorded in <strong>{imprests.find(i => String(i.id) === String(txnPayout.imprestId))?.name}</strong></>
-                        : <> — recorded in <strong>{projects.find(p => p.id === txnPayout.projectId)?.name} / Expenses</strong></>
-                      }
+                      {' '}— recorded in <strong>{projects.find(p => p.id === txnPayout.projectId)?.name} / Expenses</strong>
                     </div>
                   )}
 
@@ -2169,8 +2044,8 @@ const Payouts = () => {
                       disabled={!txnPayoutReady || !(parseFloat(txnPayout.amount) > 0) || txnRequesting}>
                       {loadedDraft?.draft.type === 'txn_payout' ? 'Update saved payout' : 'Save for later'}
                     </button>
-                    {!txnPayout.projectId && !txnPayout.imprestId && (
-                      <span className="po-hint">Select a project or imprest to continue</span>
+                    {!txnPayout.projectId && (
+                      <span className="po-hint">Select a project to continue</span>
                     )}
                   </div>
                 </div>}
@@ -2235,58 +2110,6 @@ const Payouts = () => {
                         )}
                       </div>
 
-                      <div className="po-txp-section-label">Imprest <span className="po-txp-optional">(optional)</span></div>
-                      <div className="po-field" ref={batchImprestRef} style={{ position: 'relative' }}>
-                        {imprestsLoading ? (
-                          <div className="po-txp-loading">Loading imprests…</div>
-                        ) : (
-                          <>
-                            <input
-                              type="text"
-                              className="po-txp-search"
-                              placeholder="Search imprest…"
-                              value={batchImprestSearch}
-                              onFocus={() => setBatchImprestOpen(true)}
-                              onChange={e => {
-                                setBatchImprestSearch(e.target.value);
-                                setBatchImprestOpen(true);
-                                setBatchForm(p => ({ ...p, imprestId: '', imprestName: '' }));
-                              }}
-                            />
-                            {batchImprestOpen && (
-                              <div className="po-txp-dropdown">
-                                {imprests
-                                  .filter(imp => {
-                                    const q = batchImprestSearch.toLowerCase();
-                                    return imp.name.toLowerCase().includes(q) || (imp.projectName || '').toLowerCase().includes(q);
-                                  })
-                                  .map(imp => (
-                                    <div
-                                      key={imp.id}
-                                      className={`po-txp-option${batchForm.imprestId === imp.id ? ' selected' : ''}`}
-                                      onMouseDown={() => {
-                                        setBatchForm(p => ({ ...p, imprestId: imp.id, imprestName: imp.name }));
-                                        setBatchImprestSearch(`${imp.name}${imp.projectName ? ` · ${imp.projectName}` : ''}`);
-                                        setBatchImprestOpen(false);
-                                      }}
-                                    >
-                                      <div className="po-txp-opt-name">{imp.name}{imp.projectName ? <span className="po-txp-opt-proj"> · {imp.projectName}</span> : ''}</div>
-                                      <div className="po-txp-opt-bal">{fmtCur(imp.remaining)}</div>
-                                    </div>
-                                  ))
-                                }
-                                {imprests.filter(imp => {
-                                  const q = batchImprestSearch.toLowerCase();
-                                  return imp.name.toLowerCase().includes(q) || (imp.projectName || '').toLowerCase().includes(q);
-                                }).length === 0 && (
-                                  <div className="po-txp-no-results">No imprests match</div>
-                                )}
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-
                       <div className="po-field">
                         <label>Amount (KES)</label>
                         <input
@@ -2325,7 +2148,6 @@ const Payouts = () => {
                               <tr>
                                 <th>#</th>
                                 <th>Project</th>
-                                <th>Imprest</th>
                                 <th>Description</th>
                                 <th>Amount</th>
                                 <th></th>
@@ -2336,7 +2158,6 @@ const Payouts = () => {
                                 <tr key={item.id} className={item._issue ? 'po-batch-row-issue' : ''} title={item._issue || undefined}>
                                   <td className="td-mono">{item._issue ? '⚠' : idx + 1}</td>
                                   <td>{item.projectName || '—'}</td>
-                                  <td>{item.imprestName || <span className="po-batch-expenses">Expenses</span>}</td>
                                   <td className="td-desc">{item.description}{item._issue && <div className="po-batch-issue">{item._issue}</div>}</td>
                                   <td className="td-amount">{fmtCur(item.amount)}</td>
                                   <td>
@@ -2351,7 +2172,7 @@ const Payouts = () => {
                             </tbody>
                             <tfoot>
                               <tr className="po-batch-total-row">
-                                <td colSpan={4}><strong>Total</strong></td>
+                                <td colSpan={3}><strong>Total</strong></td>
                                 <td className="td-amount"><strong>{fmtCur(batchItems.reduce((s, i) => s + i.amount, 0))}</strong></td>
                                 <td></td>
                               </tr>

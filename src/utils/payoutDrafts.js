@@ -15,9 +15,6 @@ export const DRAFT_TYPE_LABEL = {
   batch_payout: 'Batch Payout',
 };
 
-const fmtCur = (n) =>
-  new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n || 0);
-
 const fmtStamp = (d) =>
   new Date(d).toLocaleString('en-KE', {
     day: 'numeric', month: 'short', year: 'numeric',
@@ -68,7 +65,7 @@ const contactSnapshot = (phone, contacts) => {
  * Build the stored draft for a form. Returns { error } when the form wouldn't pass
  * the same checks as Pay, otherwise { form_data, amount }.
  */
-export const buildDraft = (type, state, { projects, imprests, contacts }) => {
+export const buildDraft = (type, state, { projects, contacts }) => {
   if (type === 'single') {
     const { contact, amount, description } = state;
     const amt = parseFloat(amount);
@@ -80,19 +77,16 @@ export const buildDraft = (type, state, { projects, imprests, contacts }) => {
   }
 
   if (type === 'txn_payout') {
-    const { projectId, imprestId, contact, amount, description } = state;
+    const { projectId, contact, amount, description } = state;
     const amt = parseFloat(amount);
-    if ((!projectId && !imprestId) || !contact.trim() || !(amt > 0)) {
-      return { error: 'Select a project or imprest, a recipient and an amount before saving.' };
+    if (!projectId || !contact.trim() || !(amt > 0)) {
+      return { error: 'Select a project, a recipient and an amount before saving.' };
     }
-    const project = projectId ? projects.find(p => p.id === projectId) : null;
-    const imprest = imprestId ? imprests.find(i => String(i.id) === String(imprestId)) : null;
+    const project = projects.find(p => p.id === projectId);
     return {
       amount: amt,
       form_data: {
-        projectId: projectId || '', projectName: project?.name || null,
-        imprestId: imprestId || '', imprestName: imprest?.name || null,
-        imprestProject: imprest?.projectName || null,
+        projectId, projectName: project?.name || null,
         contact: contact.trim(), amount, description,
         ...contactSnapshot(contact, contacts),
       },
@@ -107,8 +101,8 @@ export const buildDraft = (type, state, { projects, imprests, contacts }) => {
     return {
       amount: items.reduce((s, i) => s + i.amount, 0),
       form_data: {
-        items: items.map(({ projectId, projectName, imprestId, imprestName, amount, description }) =>
-          ({ projectId, projectName, imprestId, imprestName, amount, description })),
+        items: items.map(({ projectId, projectName, amount, description }) =>
+          ({ projectId, projectName, amount, description })),
         phone: phone.trim(),
         ...contactSnapshot(phone, contacts),
       },
@@ -131,14 +125,18 @@ const checkContact = (phone, contactId, contactName, contacts, warnings) => {
 };
 
 /**
- * Re-check a draft against current data. `projects` / `imprests` are null when they
- * couldn't be loaded — references are then left alone and a warning says so.
+ * Re-check a draft against current data. `projects` is null when it couldn't be
+ * loaded — references are then left alone and a warning says so.
  * Returns { form, warnings } where `form` is what to put back into the page state:
  *   single:       { contact, amount, description }
- *   txn_payout:   { projectId, imprestId, contact, amount, description, projectLabel, imprestLabel }
+ *   txn_payout:   { projectId, contact, amount, description, projectLabel }
  *   batch_payout: { items (with _issue on unusable lines), phone }
+ *
+ * Drafts saved before the imprest option was removed may still name an imprest.
+ * They are never quietly moved to a project's Expenses account: the destination
+ * is cleared (single) or the line flagged (batch) so the user chooses again.
  */
-export const checkDraft = (draft, { projects, imprests, contacts }) => {
+export const checkDraft = (draft, { projects, contacts }) => {
   const f = draft.form_data || {};
   const warnings = [];
 
@@ -146,7 +144,6 @@ export const checkDraft = (draft, { projects, imprests, contacts }) => {
     warnings.push('This payout was saved by a newer version of the app — refresh the page before using it.');
   }
   if (projects === null) warnings.push('Could not load projects to verify this payout — check the project before paying.');
-  if (imprests === null) warnings.push('Could not load imprests to verify this payout — check the imprest before paying.');
 
   if (draft.type === 'single') {
     checkContact(f.contact, f.contactId, f.contactName, contacts, warnings);
@@ -158,41 +155,26 @@ export const checkDraft = (draft, { projects, imprests, contacts }) => {
 
   if (draft.type === 'txn_payout') {
     let projectId = f.projectId || '';
-    let imprestId = f.imprestId || '';
     let project = null;
-    let imprest = null;
 
-    if (projectId && projects) {
+    if (f.imprestId) {
+      warnings.push(`This payout was saved against imprest "${f.imprestName || f.imprestId}", which can no longer be chosen — select a project to record it in that project's Expenses account.`);
+      projectId = '';
+    } else if (projectId && projects) {
       project = projects.find(p => p.id === projectId) || null;
       if (!project) {
         warnings.push(`Project "${f.projectName || projectId}" no longer exists — select where to record this payment.`);
         projectId = '';
       }
     }
-    if (imprestId && imprests) {
-      imprest = imprests.find(i => String(i.id) === String(imprestId)) || null;
-      if (!imprest) {
-        // Clear the project too, so Pay stays blocked until the user picks a destination
-        // rather than quietly falling back to the project's Expenses account.
-        warnings.push(`Imprest "${f.imprestName || imprestId}" is no longer available to you — select where to record this payment.`);
-        imprestId = '';
-        projectId = '';
-        project = null;
-      }
-    }
-    const amt = parseFloat(f.amount) || 0;
-    if (imprest && imprest.remaining < amt) {
-      warnings.push(`Imprest "${imprest.name}" has ${fmtCur(imprest.remaining)} left — less than this payout's ${fmtCur(amt)}.`);
-    }
     checkContact(f.contact, f.contactId, f.contactName, contacts, warnings);
 
     return {
       warnings,
       form: {
-        projectId, imprestId,
+        projectId,
         contact: f.contact || '', amount: String(f.amount ?? ''), description: f.description || '',
         projectLabel: project?.name || '',
-        imprestLabel: imprest ? `${imprest.name}${imprest.projectName ? ` · ${imprest.projectName}` : ''}` : '',
       },
     };
   }
@@ -200,11 +182,12 @@ export const checkDraft = (draft, { projects, imprests, contacts }) => {
   if (draft.type === 'batch_payout') {
     const items = (f.items || []).map((item, idx) => {
       let issue = null;
-      if (item.projectId && projects && !projects.find(p => p.id === item.projectId)) {
+      if (item.imprestId) {
+        issue = `Saved against imprest "${item.imprestName || item.imprestId}", which can no longer be chosen`;
+      } else if (!item.projectId) {
+        issue = 'No project selected';
+      } else if (projects && !projects.find(p => p.id === item.projectId)) {
         issue = `Project "${item.projectName || item.projectId}" no longer exists`;
-      }
-      if (item.imprestId && imprests && !imprests.find(i => String(i.id) === String(item.imprestId))) {
-        issue = `Imprest "${item.imprestName || item.imprestId}" is no longer available to you`;
       }
       if (issue) warnings.push(`Item ${idx + 1}: ${issue} — remove it and add it again.`);
       return {
@@ -214,16 +197,6 @@ export const checkDraft = (draft, { projects, imprests, contacts }) => {
       };
     });
 
-    if (imprests) {
-      const perImprest = {};
-      items.forEach(i => { if (i.imprestId && !i._issue) perImprest[i.imprestId] = (perImprest[i.imprestId] || 0) + i.amount; });
-      Object.entries(perImprest).forEach(([id, total]) => {
-        const imp = imprests.find(i => String(i.id) === String(id));
-        if (imp && imp.remaining < total) {
-          warnings.push(`Imprest "${imp.name}" has ${fmtCur(imp.remaining)} left — less than the ${fmtCur(total)} assigned to it here.`);
-        }
-      });
-    }
     checkContact(f.phone, f.contactId, f.contactName, contacts, warnings);
 
     return { warnings, form: { items, phone: f.phone || '' } };
