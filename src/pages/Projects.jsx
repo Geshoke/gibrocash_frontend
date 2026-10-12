@@ -6,6 +6,10 @@ import CreateImprestModal from '../components/CreateImprestModal';
 import ClientPayments from '../components/ClientPayments';
 import './Projects.css';
 
+// A transaction always gets an image row when it's created, even with no file, so
+// images_id alone doesn't mean a receipt exists — the stored file name does.
+const hasReceipt = (txn) => !!txn.image?.url;
+
 const Projects = () => {
   const { user, canViewAllImprests, canViewProjectComments, canManageProjects, canCreateImprests, canRecordClientPayments } = useAuth();
   const [projects, setProjects] = useState([]);
@@ -257,7 +261,7 @@ const Projects = () => {
     setSelectedTransaction(txn);
     setTransactionImageUrl(null);
 
-    if (!txn.images_id) return;
+    if (!hasReceipt(txn)) return;
 
     try {
       setLoadingImage(true);
@@ -649,6 +653,14 @@ const Projects = () => {
                                 {txns.length} txn{txns.length !== 1 ? 's' : ''}
                               </span>
                             )}
+                            {imprestTransactions[imprest.id] && (() => {
+                              const missing = txns.filter(t => !hasReceipt(t)).length;
+                              return missing > 0 ? (
+                                <span className="missing-receipt-count" title="Transactions without a receipt">
+                                  {missing} missing receipt{missing !== 1 ? 's' : ''}
+                                </span>
+                              ) : null;
+                            })()}
                             {imprest.createdAt && (
                               <>
                                 <span className="separator">·</span>
@@ -692,7 +704,7 @@ const Projects = () => {
                                       <tr
                                         key={txn.id}
                                         onClick={() => handleTransactionClick(txn)}
-                                        className={selectedTransaction?.id === txn.id ? 'selected' : ''}
+                                        className={`${selectedTransaction?.id === txn.id ? 'selected' : ''}${hasReceipt(txn) ? '' : ' missing-receipt'}`}
                                       >
                                         <td>{formatDate(txn.createdAt)}</td>
                                         <td>{txn.item}</td>
@@ -737,10 +749,10 @@ const Projects = () => {
                                           )}
                                         </td>
                                         <td>
-                                          {txn.images_id ? (
-                                            <span className="has-receipt">📎</span>
+                                          {hasReceipt(txn) ? (
+                                            <span className="receipt-badge has">✓ Receipt</span>
                                           ) : (
-                                            <span className="no-receipt">-</span>
+                                            <span className="receipt-badge missing">No receipt</span>
                                           )}
                                         </td>
                                       </tr>

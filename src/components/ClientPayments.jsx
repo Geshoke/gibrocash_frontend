@@ -35,6 +35,12 @@ const fmtDay = (d) =>
 // Today in Nairobi, as YYYY-MM-DD
 const todayEAT = () => new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+// Collapsed/expanded is a per-browser preference, kept across projects and visits.
+const COLLAPSE_KEY = 'gibrocash_client_payments_collapsed';
+const readCollapsed = () => {
+  try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; }
+};
+
 const emptyForm = () => ({
   method: 'mpesa_paybill', received_into: '', reference: '', amount: '',
   payer_name: '', payer_phone: '', paid_at: todayEAT(), notes: '',
@@ -48,6 +54,7 @@ const emptyForm = () => ({
 const ClientPayments = ({ projectId, onTotalChange }) => {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   const [loadError, setLoadError] = useState('');
   const [recordOpen, setRecordOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -136,14 +143,35 @@ const ClientPayments = ({ projectId, onTotalChange }) => {
 
   const total = payments.reduce((s, p) => s + p.amount, 0);
 
+  const toggleCollapsed = () => {
+    setCollapsed(c => {
+      try { localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1'); } catch { /* preference only */ }
+      return !c;
+    });
+  };
+
   return (
     <div className="imprests-section cp-section">
       <div className="imprests-section-head">
-        <h3>Client Payments ({payments.length})</h3>
+        <h3>
+          <button
+            type="button"
+            className="cp-toggle"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Show client payments' : 'Hide client payments'}
+          >
+            <span className={`cp-chevron${collapsed ? '' : ' open'}`}>▸</span>
+            Client Payments ({payments.length})
+            {collapsed && !loading && !loadError && payments.length > 0 && (
+              <span className="cp-collapsed-total">· {fmtCur(total)}</span>
+            )}
+          </button>
+        </h3>
         <button className="edit-project-btn" onClick={openRecord}>+ Record Payment</button>
       </div>
 
-      {loading ? (
+      {collapsed ? null : loading ? (
         <p className="no-data-inline">Loading client payments…</p>
       ) : loadError ? (
         <p className="modal-error">{loadError}</p>

@@ -561,8 +561,28 @@
   font-style: italic;
 }
 
-.has-receipt { font-size: 1rem; }
-.no-receipt { color: #cbd5e0; }
+.receipt-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.receipt-badge.has     { background: #f0fff4; color: #276749; border: 1px solid #9ae6b4; }
+.receipt-badge.missing { background: #fffaf0; color: #c05621; border: 1px solid #fbd38d; }
+
+/* Rows without a receipt get an amber edge so they stand out when scanning */
+.transactions-table tr.missing-receipt td:first-child { box-shadow: inset 3px 0 0 #ed8936; }
+
+.missing-receipt-count {
+  font-size: 0.75rem;
+  color: #c05621;
+  background: #fffaf0;
+  border: 1px solid #fbd38d;
+  padding: 0 7px;
+  border-radius: 10px;
+}
 
 /* Receipt preview */
 .transaction-image-preview {
@@ -1261,3 +1281,19 @@
 @media (max-width: 900px) {
   .detail-summary.with-received { grid-template-columns: repeat(2, 1fr); }
 }
+
+.cp-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.cp-toggle:hover { color: #2b6cb0; }
+.cp-chevron { display: inline-block; font-size: 0.8em; transition: transform 0.15s; }
+.cp-chevron.open { transform: rotate(90deg); }
+.cp-collapsed-total { font-weight: 400; color: #718096; }

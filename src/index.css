@@ -66,6 +66,8 @@ html.dark .summary-card.debit   { background: #3b1a1a; border-color: #742a2a; }
 html.dark .summary-card.balance { background: #1a2a3a; border-color: #2b6cb0; }
 html.dark .summary-card.received { background: #2a1f3d; border-color: #6b46c1; }
 html.dark .cp-remove-btn:hover   { background: #3b1a1a; }
+html.dark .cp-toggle:hover       { color: #90cdf4; }
+html.dark .cp-collapsed-total   { color: #9ca3af; }
 html.dark .summary-card h3,
 html.dark .summary-card .label  { color: #9ca3af; }
 html.dark .summary-card .amount { color: #e2e8f0; }
@@ -103,6 +105,9 @@ html.dark .transactions-table th   { background: #252f3f; color: #9ca3af; border
 html.dark .transactions-table td   { color: #d1d5db; border-bottom-color: #2d3748; }
 html.dark .transactions-table tr:hover td   { background: #263044; }
 html.dark .transactions-table tr.selected td { background: #1a2f4a; }
+html.dark .receipt-badge.has     { background: #1a3328; color: #9ae6b4; border-color: #276749; }
+html.dark .receipt-badge.missing { background: #3b2a0a; color: #fbd38d; border-color: #975a16; }
+html.dark .missing-receipt-count { background: #3b2a0a; color: #fbd38d; border-color: #975a16; }
 html.dark .transactions-table tfoot td { color: #e2e8f0; border-top-color: #374151; }
 html.dark .transactions-table .total-label { color: #9ca3af; }
 
