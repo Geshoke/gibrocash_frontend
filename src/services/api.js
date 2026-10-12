@@ -60,6 +60,7 @@ export const userService = {
   toggleDeleteReceipts: (id, delete_receipts) => api.patch(`/users/${id}/delete-receipts`, { delete_receipts }),
   toggleDeleteSavedPayouts: (id, delete_saved_payouts) => api.patch(`/users/${id}/delete-saved-payouts`, { delete_saved_payouts }),
   toggleCreateImprests: (id, create_imprests) => api.patch(`/users/${id}/create-imprests`, { create_imprests }),
+  toggleRecordClientPayments: (id, record_client_payments) => api.patch(`/users/${id}/record-client-payments`, { record_client_payments }),
 };
 
 // Payout recipient directory endpoints
@@ -154,6 +155,13 @@ export const projectService = {
   getComments: (id) => api.get(`/projects/${id}/comments`),
   addComment: (id, data) => api.post(`/projects/${id}/comments`, data),
   deleteComment: (id, commentId) => api.delete(`/projects/${id}/comments/${commentId}`),
+};
+
+// Client payments received for a project — all need record_client_payments
+export const clientPaymentService = {
+  list: (projectId) => api.get(`/projects/${projectId}/client-payments`),
+  create: (projectId, data) => api.post(`/projects/${projectId}/client-payments`, data),
+  remove: (id, reason) => api.post(`/client-payments/${id}/remove`, { reason }),
 };
 
 // Image endpoints

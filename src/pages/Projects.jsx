@@ -3,10 +3,11 @@ import { projectService, transactionService, categoryService, imageService } fro
 import { useAuth } from '../context/AuthContext';
 import { useTabRefresh } from '../hooks/useTabRefresh';
 import CreateImprestModal from '../components/CreateImprestModal';
+import ClientPayments from '../components/ClientPayments';
 import './Projects.css';
 
 const Projects = () => {
-  const { user, canViewAllImprests, canViewProjectComments, canManageProjects, canCreateImprests } = useAuth();
+  const { user, canViewAllImprests, canViewProjectComments, canManageProjects, canCreateImprests, canRecordClientPayments } = useAuth();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectDetail, setProjectDetail] = useState(null);
@@ -36,6 +37,8 @@ const Projects = () => {
   // Create/edit project modal
   const [projectModalMode, setProjectModalMode] = useState(null); // null | 'create' | 'edit'
   const [createImprestOpen, setCreateImprestOpen] = useState(false);
+  // Total received from the client for the selected project (null until loaded / on error)
+  const [clientTotal, setClientTotal] = useState(null);
   const [projectForm, setProjectForm] = useState({ name: '', description: '' });
   const [savingProject, setSavingProject] = useState(false);
   const [projectFormError, setProjectFormError] = useState('');
@@ -122,6 +125,7 @@ const Projects = () => {
   const handleSelectProject = async (project) => {
     setSelectedProject(project);
     setProjectDetail(null);
+    setClientTotal(null);
     setExpandedImprest(null);
     setImprestTransactions({});
     setSelectedTransaction(null);
@@ -520,7 +524,13 @@ const Projects = () => {
                   </div>
                 </div>
 
-                <div className="detail-summary">
+                <div className={`detail-summary${canRecordClientPayments() ? ' with-received' : ''}`}>
+                  {canRecordClientPayments() && (
+                    <div className="summary-card received">
+                      <span className="label">Received from Client</span>
+                      <span className="amount">{clientTotal === null ? '—' : formatCurrency(clientTotal)}</span>
+                    </div>
+                  )}
                   <div className="summary-card credit">
                     <span className="label">Total Allocated</span>
                     <span className="amount">{formatCurrency(projectDetail.totalAllocated)}</span>
@@ -548,6 +558,10 @@ const Projects = () => {
                       )}
                     </button>
                   </div>
+                )}
+
+                {canRecordClientPayments() && (
+                  <ClientPayments projectId={projectDetail.id} onTotalChange={setClientTotal} />
                 )}
 
                 <div className="imprests-section">

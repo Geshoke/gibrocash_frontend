@@ -64,6 +64,8 @@ html.dark .error-banner { background: #3b1a1a; color: #fc8181; border-color: #74
 html.dark .summary-card.credit  { background: #1a3328; border-color: #276749; }
 html.dark .summary-card.debit   { background: #3b1a1a; border-color: #742a2a; }
 html.dark .summary-card.balance { background: #1a2a3a; border-color: #2b6cb0; }
+html.dark .summary-card.received { background: #2a1f3d; border-color: #6b46c1; }
+html.dark .cp-remove-btn:hover   { background: #3b1a1a; }
 html.dark .summary-card h3,
 html.dark .summary-card .label  { color: #9ca3af; }
 html.dark .summary-card .amount { color: #e2e8f0; }

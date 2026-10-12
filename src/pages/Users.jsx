@@ -180,6 +180,16 @@ const Users = () => {
     }
   };
 
+  const handleToggleRecordClientPayments = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, record_client_payments: value } : u));
+    try {
+      await userService.toggleRecordClientPayments(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update record client payments:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, record_client_payments: !value } : u));
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-KE', {
       year: 'numeric',
@@ -239,6 +249,7 @@ const Users = () => {
                   <th>Delete Receipts</th>
                   <th>Delete Saved Payouts</th>
                   <th>Create Imprests</th>
+                  <th>Client Payments</th>
                 </tr>
               </thead>
               <tbody>
@@ -420,6 +431,17 @@ const Users = () => {
                           type="checkbox"
                           checked={u.create_imprests ?? false}
                           onChange={e => handleToggleCreateImprests(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.record_client_payments ?? false}
+                          onChange={e => handleToggleRecordClientPayments(u, e.target.checked)}
                           disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />

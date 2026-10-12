@@ -1235,3 +1235,29 @@
 @media (max-width: 600px) {
   .ci-row { grid-template-columns: 1fr; }
 }
+
+/* ── Client payments ─────────────────────────────────────────── */
+.detail-summary.with-received { grid-template-columns: repeat(4, 1fr); }
+.summary-card.received { background: #faf5ff; border: 1px solid #d6bcfa; }
+
+.cp-section { margin-bottom: 28px; }
+.cp-table-wrap { overflow-x: auto; }
+.cp-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cp-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; }
+.cp-sub { font-size: 0.75rem; color: #a0aec0; }
+.cp-receipt { display: block; font-family: inherit; font-size: 0.75rem; color: #3182ce; }
+.cp-remove-btn {
+  background: none;
+  border: none;
+  color: #c53030;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.cp-remove-btn:hover { background: #fff5f5; }
+.modal-save-btn.cp-danger { background: #c53030; }
+.modal-save-btn.cp-danger:hover:not(:disabled) { background: #9b2c2c; }
+
+@media (max-width: 900px) {
+  .detail-summary.with-received { grid-template-columns: repeat(2, 1fr); }
+}
