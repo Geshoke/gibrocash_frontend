@@ -1323,3 +1323,18 @@
   border-radius: 10px;
   padding: 1px 8px;
 }
+
+/* Open a project's transaction in the Transactions view */
+.open-txn-btn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 3px 10px;
+  border: 1px solid #3182ce;
+  border-radius: 6px;
+  background: transparent;
+  color: #3182ce;
+  cursor: pointer;
+}
+.open-txn-btn:hover { background: #ebf8ff; }
+.open-txn-btn.preview { margin-left: auto; margin-right: 10px; }

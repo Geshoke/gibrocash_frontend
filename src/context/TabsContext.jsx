@@ -57,6 +57,8 @@ export const TabsProvider = ({ children }) => {
   const { isAuthenticated } = useAuth();
   const [tabs, setTabs] = useState([]);
   const [activeTabId, setActiveTabId] = useState(null);
+  // A transaction another page asked the Transactions view to open and select
+  const [pendingTransactionId, setPendingTransactionId] = useState(null);
 
   useEffect(() => {
     const pathname = location.pathname;
@@ -110,11 +112,21 @@ export const TabsProvider = ({ children }) => {
     });
   }, [activeTabId, navigate]);
 
+  const openTransaction = useCallback((id) => {
+    setPendingTransactionId(id);
+    navigate('/transactions');
+  }, [navigate]);
+
+  const clearPendingTransaction = useCallback(() => setPendingTransactionId(null), []);
+
   const value = {
     tabs,
     activeTabId,
     activateTab,
     closeTab,
+    pendingTransactionId,
+    openTransaction,
+    clearPendingTransaction,
   };
 
   return (

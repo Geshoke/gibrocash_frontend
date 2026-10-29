@@ -5,6 +5,7 @@ import { useTabRefresh } from '../hooks/useTabRefresh';
 import CreateImprestModal from '../components/CreateImprestModal';
 import ClientPayments from '../components/ClientPayments';
 import ProjectStoreSummary from '../components/ProjectStoreSummary';
+import { useTabs } from '../context/TabsContext';
 import './Projects.css';
 
 // A transaction always gets an image row when it's created, even with no file, so
@@ -13,6 +14,7 @@ const hasReceipt = (txn) => !!txn.image?.url;
 
 const Projects = () => {
   const { user, canViewAllImprests, canViewProjectComments, canManageProjects, canCreateImprests, canRecordClientPayments, canViewStore } = useAuth();
+  const { openTransaction } = useTabs();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectDetail, setProjectDetail] = useState(null);
@@ -709,6 +711,7 @@ const Projects = () => {
                                       <th>Total</th>
                                       <th>Categories</th>
                                       <th>Receipt</th>
+                                      <th></th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -770,13 +773,22 @@ const Projects = () => {
                                             <span className="receipt-badge missing">No receipt</span>
                                           )}
                                         </td>
+                                        <td>
+                                          <button
+                                            className="open-txn-btn"
+                                            title="Open in the Transactions view"
+                                            onClick={e => { e.stopPropagation(); openTransaction(txn.id); }}
+                                          >
+                                            Open ↗
+                                          </button>
+                                        </td>
                                       </tr>
                                     ))}
                                   </tbody>
                                   <tfoot>
                                     <tr>
                                       <td colSpan="6" className="total-label">Subtotal:</td>
-                                      <td className="debit" colSpan="2">
+                                      <td className="debit" colSpan="3">
                                         {formatCurrency(txns.reduce((s, t) => s + parseFloat(t.price || 0), 0))}
                                       </td>
                                     </tr>
@@ -787,6 +799,12 @@ const Projects = () => {
                                   <div className="transaction-image-preview">
                                     <div className="preview-header">
                                       <h4>Receipt: {selectedTransaction.item}</h4>
+                                      <button
+                                        className="open-txn-btn preview"
+                                        onClick={() => openTransaction(selectedTransaction.id)}
+                                      >
+                                        Open in Transactions ↗
+                                      </button>
                                       <button
                                         className="close-preview-btn"
                                         onClick={() => {

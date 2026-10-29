@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { transactionService, imageService, categoryService, imprestService, projectService, storeService } from '../services/api';
 import MoveToStoreModal from '../components/MoveToStoreModal';
 import { useTabRefresh } from '../hooks/useTabRefresh';
+import { useTabs } from '../context/TabsContext';
 import './Transactions.css';
 
 const LIMIT = 50;
@@ -10,6 +11,7 @@ const EMPTY_FILTERS = { search: '', from_date: '', to_date: '', category_id: '' 
 
 const Transactions = () => {
   const { user, canViewAllImprests, canEditTransactions, canMoveTransactions, canDeleteReceipts, canViewStore, canEditStore } = useAuth();
+  const { pendingTransactionId, clearPendingTransaction } = useTabs();
 
   // ── Data ──────────────────────────────────────────────────────
   const [transactions, setTransactions] = useState([]);
@@ -52,6 +54,9 @@ const Transactions = () => {
   const [storeInfo, setStoreInfo]           = useState(null);
   const [storeModalOpen, setStoreModalOpen] = useState(false);
   const storeRequestRef = useRef(null); // id of the transaction whose store entries we last asked for
+  // A transaction opened from another page stays pinned at the top of the list across silent
+  // refreshes (it may be on a later page or outside the filters) until the list is reloaded.
+  const pinnedTxnRef = useRef(null);
 
   // ── Move to imprest ───────────────────────────────────────────
   const [allImprests, setAllImprests]           = useState([]);
@@ -96,6 +101,25 @@ const Transactions = () => {
 
   useTabRefresh('/transactions', () => { if (user) fetchTransactions(true); });
 
+  // Opened from another page (e.g. a project's imprest): once the list has loaded, fetch that
+  // transaction, pin it to the top if it isn't on the loaded page or is hidden by the filters,
+  // and select it.
+  useEffect(() => {
+    if (!pendingTransactionId || loading) return;
+    const id = pendingTransactionId;
+    clearPendingTransaction();
+    transactionService.getById(id)
+      .then(({ data }) => {
+        const txn = data.transaction;
+        if (!txn) return;
+        pinnedTxnRef.current = txn;
+        setTransactions(prev => (prev.some(t => t.id === txn.id) ? prev : [txn, ...prev]));
+        handleTransactionClick(txn);
+        setTimeout(() => document.querySelector('.txn-list-item.active')?.scrollIntoView({ block: 'nearest' }), 0);
+      })
+      .catch(err => console.error('Failed to open transaction:', err));
+  }, [pendingTransactionId, loading]); // eslint-disable-line
+
   useEffect(() => {
     if (!categoryPopoverOpen) return;
     const close = () => setCategoryPopoverOpen(false);
@@ -133,12 +157,14 @@ const Transactions = () => {
       if (!silent) {
         setLoading(true);
         setSelectedTransaction(null);
+        pinnedTxnRef.current = null;
       }
       const userId = canViewAllImprests() ? undefined : user.id;
       const response = await transactionService.getAll(userId, 1, LIMIT, appliedFilters);
       const rows  = response.data?.transactions?.rows  || [];
       const count = response.data?.transactions?.count || 0;
-      setTransactions(rows);
+      const pinned = pinnedTxnRef.current;
+      setTransactions(pinned && !rows.some(t => t.id === pinned.id) ? [pinned, ...rows] : rows);
       setTotalCount(count);
       setPage(1);
       setHasMore(rows.length < count);
@@ -160,7 +186,8 @@ const Transactions = () => {
       const rows  = response.data?.transactions?.rows  || [];
       const count = response.data?.transactions?.count || 0;
       setTransactions(prev => {
-        const updated = [...prev, ...rows];
+        // Skip a pinned transaction that turns up on its own page
+        const updated = [...prev, ...rows.filter(r => !prev.some(t => t.id === r.id))];
         setHasMore(updated.length < count);
         setTotalCount(count);
         return updated;

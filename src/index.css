@@ -325,3 +325,4 @@ html.dark .summary-card.ps-moved  { background: #3b2a0a; border-color: #975a16; 
 html.dark .summary-card.ps-issued { background: #1a3328; border-color: #276749; }
 html.dark .summary-card.ps-net    { background: #252f3f; border-color: #4b5563; }
 html.dark .ps-txn-tag             { background: #3b2a0a; color: #fbd38d; border-color: #975a16; }
+html.dark .open-txn-btn:hover     { background: #1a2a3a; }
