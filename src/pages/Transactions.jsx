@@ -1230,7 +1230,7 @@ const Transactions = () => {
             <button className="split-add-btn" onClick={addSplitPart}>+ Add Part</button>
 
             <p className="split-note">
-              Each part's name will end with the same number (e.g. <em>Cement_482</em>) so you can tell they came from one transaction.
+              Each part's name will end with the same split number (e.g. <em>Cement:spliture_482</em>) so you can tell they came from one transaction.
               {selectedTransaction.image?.url && ' The receipt is attached to every part.'}
             </p>
 
