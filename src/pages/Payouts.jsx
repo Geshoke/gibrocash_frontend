@@ -347,7 +347,10 @@ const Payouts = () => {
     );
   };
 
+  // Also refreshes the balance: Safaricom's result callback records a payment's outcome
+  // and the new account balance together, so whenever the ledger may have changed, so has it.
   const fetchLedger = () => {
+    fetchBalance();
     Promise.allSettled([
       payoutService.getPayments(),
       payoutService.getB2bPayments(),
@@ -657,12 +660,11 @@ const Payouts = () => {
     fetchSavedPayouts(true);
   };
 
-  useEffect(() => { fetchLedger(); fetchBalance(); fetchUnrecordedTxnPayouts(); fetchSavedPayouts(); }, []); // eslint-disable-line
+  useEffect(() => { fetchLedger(); fetchUnrecordedTxnPayouts(); fetchSavedPayouts(); }, []); // eslint-disable-line
 
   useTabRefresh('/payouts', () => {
     fetchLedger();
     fetchContacts(true);
-    fetchBalance();
     fetchUnrecordedTxnPayouts();
     fetchSavedPayouts(true);
   });
