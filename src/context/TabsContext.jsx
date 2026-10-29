@@ -20,6 +20,7 @@ export const NAV_ITEMS = [
   { path: '/proposals', label: 'Proposals', icon: '📋' },
   { path: '/invoices', label: 'Invoices', icon: '🧾', requires: 'invoice' },
   { path: '/supplier-invoices', label: 'Supplier Invoices', icon: '📑' },
+  { path: '/store', label: 'Store', icon: '📦', requires: 'store' },
   { path: '/payouts', label: 'Payouts', icon: '💸', requires: 'payout' },
   { path: '/users', label: 'Users', icon: '👥', requires: 'admin' },
   { path: '/settings', label: 'Settings', icon: '⚙️' },

@@ -61,6 +61,8 @@ export const userService = {
   toggleDeleteSavedPayouts: (id, delete_saved_payouts) => api.patch(`/users/${id}/delete-saved-payouts`, { delete_saved_payouts }),
   toggleCreateImprests: (id, create_imprests) => api.patch(`/users/${id}/create-imprests`, { create_imprests }),
   toggleRecordClientPayments: (id, record_client_payments) => api.patch(`/users/${id}/record-client-payments`, { record_client_payments }),
+  toggleViewStore: (id, view_store) => api.patch(`/users/${id}/view-store`, { view_store }),
+  toggleEditStore: (id, edit_store) => api.patch(`/users/${id}/edit-store`, { edit_store }),
 };
 
 // Payout recipient directory endpoints
@@ -162,6 +164,20 @@ export const clientPaymentService = {
   list: (projectId) => api.get(`/projects/${projectId}/client-payments`),
   create: (projectId, data) => api.post(`/projects/${projectId}/client-payments`, data),
   remove: (id, reason) => api.post(`/client-payments/${id}/remove`, { reason }),
+};
+
+// Company store — viewing needs view_store (or edit_store); changes need edit_store
+export const storeService = {
+  list: (params) => api.get('/store/items', { params }),
+  getById: (id) => api.get(`/store/items/${id}`),
+  // Body: { name, item_type, unit?, category?, description?, location?, reorder_level?, opening?: { quantity, unit_cost, date?, note? } }
+  create: (data) => api.post('/store/items', data),
+  update: (id, data) => api.patch(`/store/items/${id}`, data),
+  // Body: { movement_type, quantity, unit_cost? (opening), project_id?, holder_name?, date?, note? }
+  recordMovement: (id, data) => api.post(`/store/items/${id}/movements`, data),
+  transactionEntries: (transactionId) => api.get(`/transactions/${transactionId}/store-entries`),
+  // Body: { store_item_id } or { new_item: {...} }, quantity, total_cost?, note?
+  moveTransaction: (transactionId, data) => api.post(`/transactions/${transactionId}/move-to-store`, data),
 };
 
 // Image endpoints

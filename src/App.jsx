@@ -17,6 +17,7 @@ import Invoices from './pages/Invoices';
 import InvoiceForm from './pages/InvoiceForm';
 import InvoiceView from './pages/InvoiceView';
 import SupplierInvoices from './pages/SupplierInvoices';
+import Store from './pages/Store';
 import './App.css';
 
 const routeElements = [
@@ -33,6 +34,7 @@ const routeElements = [
   { path: '/invoices/:id/edit', element: <ProtectedRoute require="invoice"><InvoiceForm /></ProtectedRoute> },
   { path: '/invoices/:id', element: <ProtectedRoute require="invoice"><InvoiceView /></ProtectedRoute> },
   { path: '/supplier-invoices', element: <ProtectedRoute><SupplierInvoices /></ProtectedRoute> },
+  { path: '/store', element: <ProtectedRoute require="store"><Store /></ProtectedRoute> },
 ];
 
 const TabsHost = () => {

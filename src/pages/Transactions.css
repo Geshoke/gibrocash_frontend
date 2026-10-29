@@ -1149,3 +1149,44 @@
 .txn-move-section .txn-move-combo {
   margin-bottom: 8px;
 }
+
+/* ── Split / Edit with Move to Store underneath, spanning both ── */
+.txn-action-stack {
+  display: grid;
+  gap: 6px;
+}
+.txn-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.txn-split-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.txn-store-btn {
+  width: 100%;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border: 1px solid #b83232;
+  border-radius: 6px;
+  background: #c53030;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.txn-store-btn:hover { background: #9b2c2c; }
+
+.txn-store-info {
+  margin: 16px 0;
+  padding: 10px 12px;
+  border: 1px solid #feb2b2;
+  background: #fff5f5;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.txn-store-info ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.txn-store-info li { display: flex; justify-content: space-between; gap: 10px; font-size: 0.85rem; color: #2d3748; }
+.txn-store-info p  { margin: 0; font-size: 0.78rem; color: #9b2c2c; }

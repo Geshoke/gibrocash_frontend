@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { transactionService, imageService, categoryService, imprestService, projectService } from '../services/api';
+import { transactionService, imageService, categoryService, imprestService, projectService, storeService } from '../services/api';
+import MoveToStoreModal from '../components/MoveToStoreModal';
 import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Transactions.css';
 
@@ -8,7 +9,7 @@ const LIMIT = 50;
 const EMPTY_FILTERS = { search: '', from_date: '', to_date: '', category_id: '' };
 
 const Transactions = () => {
-  const { user, canViewAllImprests, canEditTransactions, canMoveTransactions, canDeleteReceipts } = useAuth();
+  const { user, canViewAllImprests, canEditTransactions, canMoveTransactions, canDeleteReceipts, canViewStore, canEditStore } = useAuth();
 
   // ── Data ──────────────────────────────────────────────────────
   const [transactions, setTransactions] = useState([]);
@@ -45,6 +46,12 @@ const Transactions = () => {
   const [splitParts, setSplitParts] = useState([]);
   const [splitSaving, setSplitSaving] = useState(false);
   const [splitError, setSplitError]   = useState('');
+
+  // ── Company store ─────────────────────────────────────────────
+  // { entries, moved_value, remaining_value } for the selected transaction
+  const [storeInfo, setStoreInfo]           = useState(null);
+  const [storeModalOpen, setStoreModalOpen] = useState(false);
+  const storeRequestRef = useRef(null); // id of the transaction whose store entries we last asked for
 
   // ── Move to imprest ───────────────────────────────────────────
   const [allImprests, setAllImprests]           = useState([]);
@@ -219,6 +226,20 @@ const Transactions = () => {
     setCategoryPopoverOpen(false);
     setEditMode(false);
     loadTransactionImage(txn);
+    loadStoreInfo(txn);
+  };
+
+  const loadStoreInfo = async (txn) => {
+    setStoreInfo(null);
+    storeRequestRef.current = txn.id;
+    if (!canViewStore()) return;
+    try {
+      const res = await storeService.transactionEntries(txn.id);
+      // Ignore a late response if another transaction was selected meanwhile
+      if (storeRequestRef.current === txn.id) setStoreInfo(res.data);
+    } catch (err) {
+      console.error('Failed to load store entries:', err);
+    }
   };
 
   const handleReceiptUpload = async (file) => {
@@ -671,11 +692,23 @@ const Transactions = () => {
                     </div>
                   </div>
                   <div className="txn-detail-header-actions">
-                    {canEditTransactions() && !editMode && (
-                      <>
-                        <button className="txn-split-btn" onClick={openSplit}>Split</button>
-                        <button className="txn-edit-btn" onClick={openEdit}>Edit</button>
-                      </>
+                    {!editMode && (canEditTransactions() || canEditStore()) && (
+                      <div className="txn-action-stack">
+                        {canEditTransactions() && (
+                          <div className="txn-action-row">
+                            <button className="txn-split-btn" onClick={openSplit} disabled={storeInfo?.moved_value > 0}
+                              title={storeInfo?.moved_value > 0 ? 'Items from this transaction are in the store' : undefined}>
+                              Split
+                            </button>
+                            <button className="txn-edit-btn" onClick={openEdit}>Edit</button>
+                          </div>
+                        )}
+                        {canEditStore() && storeInfo && storeInfo.remaining_value > 0 && (
+                          <button className="txn-store-btn" onClick={() => setStoreModalOpen(true)}>
+                            {storeInfo.moved_value > 0 ? 'Move more to Store' : 'Move to Store'}
+                          </button>
+                        )}
+                      </div>
                     )}
                     <button
                       className="close-preview-btn"
@@ -968,6 +1001,23 @@ const Transactions = () => {
                     </div>
                   )}
 
+                  {!editMode && storeInfo?.entries?.length > 0 && (
+                    <div className="txn-store-info">
+                      <span className="txn-detail-label">In the store</span>
+                      <ul>
+                        {storeInfo.entries.map(e => (
+                          <li key={e.id}>
+                            <span>{e.quantity} {e.store_item?.unit} &middot; {e.store_item?.name}</span>
+                            <span>{formatCurrency(e.total_cost)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {storeInfo.remaining_value > 0 && (
+                        <p>{formatCurrency(storeInfo.remaining_value)} of this transaction is not in the store.</p>
+                      )}
+                    </div>
+                  )}
+
                   {/* M-Pesa payout info */}
                   {selectedTransaction.mpesa_code && (
                     <div className="txn-detail-section">
@@ -1090,6 +1140,18 @@ const Transactions = () => {
           </div>
         </div>
       </div>
+
+      {storeModalOpen && selectedTransaction && storeInfo && (
+        <MoveToStoreModal
+          transaction={selectedTransaction}
+          remainingValue={storeInfo.remaining_value}
+          onClose={() => setStoreModalOpen(false)}
+          onMoved={(data) => {
+            setStoreInfo({ entries: data.entries, moved_value: data.moved_value, remaining_value: data.remaining_value });
+            setStoreModalOpen(false);
+          }}
+        />
+      )}
 
       {/* Split modal */}
       {splitMode && selectedTransaction && (

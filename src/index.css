@@ -261,3 +261,57 @@ html.dark .pin-expired-body p              { color: #9ca3af; }
 html.dark ::-webkit-scrollbar-track { background: #1e2533; }
 html.dark ::-webkit-scrollbar-thumb { background: #4b5563; }
 html.dark ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+/* Store */
+html.dark .st-page-header h1,
+html.dark .st-list-name,
+html.dark .st-detail-header h2,
+html.dark .st-stat-value,
+html.dark .st-summary-card strong,
+html.dark .st-movement-form-header h4,
+html.dark .st-modal-header h3   { color: #e2e8f0; }
+html.dark .st-summary-card,
+html.dark .st-list-panel,
+html.dark .st-detail-panel,
+html.dark .st-modal              { background: #1e2533; border-color: #374151; }
+html.dark .st-summary-card.low.active { background: #3b1a1a; border-color: #742a2a; border-left-color: #fc8181; }
+html.dark .st-toolbar,
+html.dark .st-detail-header      { border-color: #374151; }
+html.dark .st-tabs,
+html.dark .st-tab + .st-tab      { border-color: #4b5563; }
+html.dark .st-tab                { background: #252f3f; color: #9ca3af; }
+html.dark .st-tab.active         { background: #1e3a5f; color: #fff; }
+html.dark .st-search,
+html.dark .st-field input,
+html.dark .st-field select,
+html.dark .st-field textarea     { background: #252f3f; border-color: #4b5563; color: #e2e8f0; }
+html.dark .st-list-item          { border-bottom-color: #2d3748; }
+html.dark .st-list-item:hover    { background: #263044; }
+html.dark .st-list-item.active   { background: #1a2f4a; }
+html.dark .st-list-qty,
+html.dark .st-history-type,
+html.dark .st-holdings strong,
+html.dark .st-info-grid strong,
+html.dark .st-type-option strong { color: #d1d5db; }
+html.dark .st-stat               { background: #252f3f; border-color: #374151; }
+html.dark .st-holdings li,
+html.dark .st-pick-list          { border-color: #374151; }
+html.dark .st-history-item + .st-history-item { border-top-color: #2d3748; }
+html.dark .st-history-note       { color: #9ca3af; }
+html.dark .st-history-source     { color: #63b3ed; }
+html.dark .st-action             { background: transparent; }
+html.dark .st-type-option        { background: #252f3f; border-color: #4b5563; }
+html.dark .st-type-option.active { background: #1a2f4a; border-color: #3182ce; }
+html.dark .st-movement-form      { background: #1a2a3a; border-color: #2b6cb0; }
+html.dark .st-cost-note          { background: #1a2a3a; color: #90cdf4; }
+html.dark .st-opening            { border-color: #4b5563; }
+html.dark .st-opening legend,
+html.dark .st-field > span       { color: #9ca3af; }
+html.dark .st-btn-secondary      { background: #374151; color: #d1d5db; }
+html.dark .st-tag                { background: #374151; color: #d1d5db; }
+html.dark .st-type-badge.consumable { background: #1a3328; color: #9ae6b4; border-color: #276749; }
+html.dark .st-type-badge.tool       { background: #1a2a3a; color: #90cdf4; border-color: #2b6cb0; }
+html.dark .st-low-badge          { background: #3b1a1a; color: #fc8181; border-color: #742a2a; }
+html.dark .txn-store-info        { background: #3b1a1a; border-color: #742a2a; }
+html.dark .txn-store-info li     { color: #e2e8f0; }
+html.dark .txn-store-info p      { color: #fc8181; }

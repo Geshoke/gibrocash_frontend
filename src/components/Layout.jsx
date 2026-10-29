@@ -9,6 +9,7 @@ const PERMISSION_CHECKS = {
   invoice: (auth) => auth.canCreateInvoices(),
   payout: (auth) => auth.canPayout(),
   admin: (auth) => auth.isSuperAdmin(),
+  store: (auth) => auth.canViewStore(),
 };
 
 const TabBar = () => {

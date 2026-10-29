@@ -180,6 +180,26 @@ const Users = () => {
     }
   };
 
+  const handleToggleViewStore = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, view_store: value } : u));
+    try {
+      await userService.toggleViewStore(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update view store:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, view_store: !value } : u));
+    }
+  };
+
+  const handleToggleEditStore = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, edit_store: value } : u));
+    try {
+      await userService.toggleEditStore(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update edit store:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, edit_store: !value } : u));
+    }
+  };
+
   const handleToggleRecordClientPayments = async (targetUser, value) => {
     setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, record_client_payments: value } : u));
     try {
@@ -250,6 +270,8 @@ const Users = () => {
                   <th>Delete Saved Payouts</th>
                   <th>Create Imprests</th>
                   <th>Client Payments</th>
+                  <th>View Store</th>
+                  <th>Edit Store</th>
                 </tr>
               </thead>
               <tbody>
@@ -442,6 +464,28 @@ const Users = () => {
                           type="checkbox"
                           checked={u.record_client_payments ?? false}
                           onChange={e => handleToggleRecordClientPayments(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.view_store ?? false}
+                          onChange={e => handleToggleViewStore(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.edit_store ?? false}
+                          onChange={e => handleToggleEditStore(u, e.target.checked)}
                           disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />
