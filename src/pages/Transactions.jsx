@@ -462,8 +462,8 @@ const Transactions = () => {
       setSplitMode(false);
       setSelectedTransaction(null);
       setTransactionImageUrl(null);
-    } catch {
-      setSplitError('Failed to split transaction. Please try again.');
+    } catch (err) {
+      setSplitError(err.response?.data?.response || 'Failed to split transaction. Please try again.');
     } finally {
       setSplitSaving(false);
     }
@@ -1226,6 +1226,11 @@ const Transactions = () => {
             </div>
 
             <button className="split-add-btn" onClick={addSplitPart}>+ Add Part</button>
+
+            <p className="split-note">
+              Each part's name will end with the same number (e.g. <em>Cement_482</em>) so you can tell they came from one transaction.
+              {selectedTransaction.image?.url && ' The receipt is attached to every part.'}
+            </p>
 
             <div className={`split-remainder${splitBalanced ? ' balanced' : ''}`}>
               {splitBalanced

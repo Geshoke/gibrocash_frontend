@@ -1116,6 +1116,13 @@
 }
 .split-add-btn:hover { border-color: #3182ce; color: #3182ce; }
 
+.split-note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #718096;
+  line-height: 1.4;
+}
+
 .split-remainder {
   font-size: 0.85rem;
   font-weight: 600;
