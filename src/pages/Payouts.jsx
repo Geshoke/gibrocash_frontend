@@ -667,6 +667,8 @@ const Payouts = () => {
     fetchContacts(true);
     fetchUnrecordedTxnPayouts();
     fetchSavedPayouts(true);
+    // Projects (and their imprests) may have been created on another tab meanwhile
+    if (projectsPromiseRef.current) ensureProjects({ fresh: true, silent: true });
   });
 
   // Persist failed txn ledger
@@ -698,9 +700,10 @@ const Payouts = () => {
   // the fetch failed) so a saved payout can wait for it before it is checked and filled in.
   const projectsPromiseRef = useRef(null);
 
-  const ensureProjects = ({ fresh = false } = {}) => {
+  // `silent` refreshes without showing the loading state (used when returning to the tab).
+  const ensureProjects = ({ fresh = false, silent = false } = {}) => {
     if (fresh || !projectsPromiseRef.current) {
-      setProjectsLoading(true);
+      if (!silent) setProjectsLoading(true);
       projectsPromiseRef.current = projectService.getAll()
         .then(({ data }) => { const list = data.projects || []; setProjects(list); return list; })
         .catch(() => { projectsPromiseRef.current = null; return null; })
