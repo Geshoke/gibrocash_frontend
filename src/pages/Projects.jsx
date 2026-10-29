@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTabRefresh } from '../hooks/useTabRefresh';
 import CreateImprestModal from '../components/CreateImprestModal';
 import ClientPayments from '../components/ClientPayments';
+import ProjectStoreSummary from '../components/ProjectStoreSummary';
 import './Projects.css';
 
 // A transaction always gets an image row when it's created, even with no file, so
@@ -11,7 +12,7 @@ import './Projects.css';
 const hasReceipt = (txn) => !!txn.image?.url;
 
 const Projects = () => {
-  const { user, canViewAllImprests, canViewProjectComments, canManageProjects, canCreateImprests, canRecordClientPayments } = useAuth();
+  const { user, canViewAllImprests, canViewProjectComments, canManageProjects, canCreateImprests, canRecordClientPayments, canViewStore } = useAuth();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectDetail, setProjectDetail] = useState(null);
@@ -43,6 +44,8 @@ const Projects = () => {
   const [createImprestOpen, setCreateImprestOpen] = useState(false);
   // Total received from the client for the selected project (null until loaded / on error)
   const [clientTotal, setClientTotal] = useState(null);
+  // Ids of this project's transactions that have stock in the company store
+  const [storeTxnIds, setStoreTxnIds] = useState(() => new Set());
   const [projectForm, setProjectForm] = useState({ name: '', description: '' });
   const [savingProject, setSavingProject] = useState(false);
   const [projectFormError, setProjectFormError] = useState('');
@@ -130,6 +133,7 @@ const Projects = () => {
     setSelectedProject(project);
     setProjectDetail(null);
     setClientTotal(null);
+    setStoreTxnIds(new Set());
     setExpandedImprest(null);
     setImprestTransactions({});
     setSelectedTransaction(null);
@@ -549,6 +553,14 @@ const Projects = () => {
                   </div>
                 </div>
 
+                {canViewStore() && (
+                  <ProjectStoreSummary
+                    projectId={projectDetail.id}
+                    totalUsed={projectDetail.totalUsed}
+                    onTransactionIds={setStoreTxnIds}
+                  />
+                )}
+
                 {canViewProjectComments() && (
                   <div className="comment-bubble-row">
                     <button
@@ -707,7 +719,10 @@ const Projects = () => {
                                         className={`${selectedTransaction?.id === txn.id ? 'selected' : ''}${hasReceipt(txn) ? '' : ' missing-receipt'}`}
                                       >
                                         <td>{formatDate(txn.createdAt)}</td>
-                                        <td>{txn.item}</td>
+                                        <td>
+                                          {txn.item}
+                                          {storeTxnIds.has(txn.id) && <span className="ps-txn-tag" title="Items from this purchase are in the company store">📦 In store</span>}
+                                        </td>
                                         <td>{txn.quantity}</td>
                                         <td>{formatCurrency(txn.unitPrice)}</td>
                                         <td>{formatCurrency(txn.vat_charged)}</td>

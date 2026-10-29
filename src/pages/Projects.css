@@ -1297,3 +1297,29 @@
 .cp-chevron { display: inline-block; font-size: 0.8em; transition: transform 0.15s; }
 .cp-chevron.open { transform: rotate(90deg); }
 .cp-collapsed-total { font-weight: 400; color: #718096; }
+
+/* Project ↔ store summary (only shown when the project has store activity) */
+.ps-section { margin-bottom: 28px; }
+.ps-summary { margin-bottom: 10px; }
+.summary-card.ps-moved  { background: #fffaf0; border: 1px solid #fbd38d; }
+.summary-card.ps-issued { background: #f0fff4; border: 1px solid #9ae6b4; }
+.summary-card.ps-net    { background: #f7fafc; border: 1px solid #cbd5e0; }
+.ps-sub { font-size: 0.74rem; color: #a0aec0; }
+.ps-details h4 {
+  margin: 14px 0 6px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #718096;
+}
+.ps-txn-tag {
+  margin-left: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #9c4221;
+  background: #fffaf0;
+  border: 1px solid #fbd38d;
+  border-radius: 10px;
+  padding: 1px 8px;
+}

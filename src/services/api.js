@@ -178,6 +178,8 @@ export const storeService = {
   // Body: { movement_type, quantity, unit_cost? (opening), project_id?, holder_name?, date?, note? }
   recordMovement: (id, data) => api.post(`/store/items/${id}/movements`, data),
   transactionEntries: (transactionId) => api.get(`/transactions/${transactionId}/store-entries`),
+  // { has_activity, moved_in, moved_value, issued, issued_value, tools_here, transaction_ids }
+  projectSummary: (projectId) => api.get(`/projects/${projectId}/store-summary`),
   // Body: { store_item_id } or { new_item: {...} }, quantity, total_cost?, note?
   moveTransaction: (transactionId, data) => api.post(`/transactions/${transactionId}/move-to-store`, data),
 };
