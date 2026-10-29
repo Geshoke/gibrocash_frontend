@@ -454,9 +454,11 @@ const Transactions = () => {
       }));
       const res     = await transactionService.split(selectedTransaction.id, parts);
       const newTxns = res.data?.transactions || [];
+      // Parts keep the original's date, so they take its place in the list
       setTransactions(prev => {
-        const without = prev.filter(t => t.id !== selectedTransaction.id);
-        return [...newTxns, ...without];
+        const at = prev.findIndex(t => t.id === selectedTransaction.id);
+        if (at === -1) return [...newTxns, ...prev];
+        return [...prev.slice(0, at), ...newTxns, ...prev.slice(at + 1)];
       });
       setTotalCount(prev => prev - 1 + newTxns.length);
       setSplitMode(false);
