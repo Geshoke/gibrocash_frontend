@@ -262,6 +262,46 @@
 .po-sub-table th   { font-size: 0.68rem; }
 .po-sub-table td   { font-size: 0.8rem; background: #f8fafc; }
 
+/* Batch payout line items */
+.po-row-expanded td { background: #f1f5f9; }
+.po-batch-note       { margin: 4px 0; font-size: 0.82rem; color: #64748b; }
+.po-batch-note.error { color: #c05621; }
+.po-batch-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 4px 2px;
+  font-size: 0.8rem;
+  color: #475569;
+}
+.po-batch-gap {
+  color: #c05621;
+  background: #fffaf0;
+  border: 1px solid #fbd38d;
+  border-radius: 10px;
+  padding: 1px 10px;
+  font-weight: 600;
+}
+.po-batch-voucher-btn {
+  margin-left: auto;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.po-batch-voucher-btn:hover { background: #f1f5f9; }
+.po-receipt-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+.po-receipt-badge.has     { background: #f0fff4; color: #276749; border: 1px solid #9ae6b4; }
+.po-receipt-badge.missing { background: #fffaf0; color: #c05621; border: 1px solid #fbd38d; }
+
 .po-expand-btn {
   background: none;
   border: 1px solid #e2e8f0;

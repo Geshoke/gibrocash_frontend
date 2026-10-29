@@ -172,6 +172,8 @@ const Payouts = () => {
   // ── History ──────────────────────────────────────────────────
   const [history, setHistory]       = useState([]);
   const [expanded, setExpanded]     = useState(null);
+  // Line items of batch payouts, by M-Pesa code: { loading, error, transactions, total }
+  const [batchLines, setBatchLines] = useState({});
   const [historyPage, setHistoryPage]         = useState(1);
   const [historyPageSize, setHistoryPageSize] = useState(20);
   const [voucher, setVoucher]       = useState(null);
@@ -266,6 +268,83 @@ const Payouts = () => {
     if (s === 'success') return 'completed';
     if (s === 'pending') return 'processing';
     return 'failed'; // failed, timeout
+  };
+
+  const toggleBatchPayout = (entry) => {
+    const opening = expanded !== entry.id;
+    setExpanded(opening ? entry.id : null);
+    const code = entry.payload?.transactionReceipt;
+    if (!opening || !code || (batchLines[code] && !batchLines[code].error)) return;
+    setBatchLines(prev => ({ ...prev, [code]: { loading: true } }));
+    transactionService.getByMpesaCode(code)
+      .then(({ data }) => setBatchLines(prev => ({ ...prev, [code]: { transactions: data.transactions || [], total: data.total || 0 } })))
+      .catch(() => setBatchLines(prev => ({ ...prev, [code]: { error: 'Could not load the items in this batch.' } })));
+  };
+
+  const renderBatchPayoutItems = (entry) => {
+    const code = entry.payload?.transactionReceipt;
+    if (!code) {
+      return (
+        <p className="po-batch-note">
+          {entry.status === 'completed'
+            ? 'No M-Pesa code was saved for this payment, so its items can’t be matched.'
+            : 'Items are recorded once M-Pesa confirms the payment.'}
+        </p>
+      );
+    }
+    const lines = batchLines[code];
+    if (!lines || lines.loading) return <p className="po-batch-note">Loading items…</p>;
+    if (lines.error) return <p className="po-batch-note error">{lines.error}</p>;
+    if (lines.transactions.length === 0) {
+      return <p className="po-batch-note error">No transactions are recorded against {code}. Check Action Required.</p>;
+    }
+    const gap = Math.round(((entry.amount || 0) - lines.total) * 100) / 100;
+    return (
+      <>
+        <table className="po-table po-sub-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Item</th>
+              <th>Project</th>
+              <th>Imprest</th>
+              <th>Recorded by</th>
+              <th>Receipt</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.transactions.map((t, i) => (
+              <tr key={t.id}>
+                <td className="td-mono">{i + 1}</td>
+                <td>{t.item}</td>
+                <td>{t.imprest?.project?.name || '—'}</td>
+                <td>{t.imprest?.name || '—'}</td>
+                <td>{t.user?.name || '—'}</td>
+                <td>
+                  <span className={`po-receipt-badge ${t.image?.url ? 'has' : 'missing'}`}>
+                    {t.image?.url ? 'Attached' : 'Missing'}
+                  </span>
+                </td>
+                <td className="td-amount">{fmtCur(parseFloat(t.price))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="po-batch-footer">
+          <span className="td-mono">M-Pesa {code}</span>
+          <span>
+            {lines.transactions.length} item{lines.transactions.length !== 1 ? 's' : ''} · recorded {fmtCur(lines.total)} of {fmtCur(entry.amount)} paid
+          </span>
+          {Math.abs(gap) >= 0.01 && (
+            <span className="po-batch-gap">
+              {gap > 0 ? `${fmtCur(gap)} not recorded — check Action Required` : `${fmtCur(-gap)} more recorded than paid`}
+            </span>
+          )}
+          <button className="po-batch-voucher-btn" onClick={() => setVoucher(buildVoucher(entry))}>🧾 Voucher</button>
+        </div>
+      </>
+    );
   };
 
   const fetchLedger = () => {
@@ -1567,11 +1646,15 @@ const Payouts = () => {
                           <tbody>
                             {pageEntries.map(entry => {
                               const isBatch = Array.isArray(entry.payload?.rows);
+                              const isBatchPayout = entry.type === 'batch_payout';
                               return (
                               <React.Fragment key={entry.id}>
                                 <tr
-                                  className={isBatch ? '' : 'po-row-clickable'}
-                                  onClick={() => { if (!isBatch) setVoucher(buildVoucher(entry)); }}
+                                  className={`${isBatch ? '' : 'po-row-clickable'}${isBatchPayout && expanded === entry.id ? ' po-row-expanded' : ''}`}
+                                  onClick={() => {
+                                    if (isBatchPayout) toggleBatchPayout(entry);
+                                    else if (!isBatch) setVoucher(buildVoucher(entry));
+                                  }}
                                 >
                                   <td className="td-mono">{fmtDate(entry.date)}</td>
                                   <td><span className={`po-type-badge ${entry.type}`}>{TYPE_LABEL[entry.type]}</span></td>
@@ -1585,10 +1668,15 @@ const Payouts = () => {
                                     </span>
                                   </td>
                                   <td>
-                                    {isBatch ? (
+                                    {isBatch || isBatchPayout ? (
                                       <button
                                         className="po-expand-btn"
-                                        onClick={(e) => { e.stopPropagation(); setExpanded(expanded === entry.id ? null : entry.id); }}
+                                        title={isBatchPayout ? 'Show the items in this batch' : undefined}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (isBatchPayout) toggleBatchPayout(entry);
+                                          else setExpanded(expanded === entry.id ? null : entry.id);
+                                        }}
                                       >
                                         {expanded === entry.id ? '▲' : '▼'}
                                       </button>
@@ -1603,6 +1691,14 @@ const Payouts = () => {
                                     )}
                                   </td>
                                 </tr>
+
+                                {isBatchPayout && expanded === entry.id && (
+                                  <tr className="po-sub-row">
+                                    <td colSpan={7}>
+                                      <div className="po-sub-wrap">{renderBatchPayoutItems(entry)}</div>
+                                    </td>
+                                  </tr>
+                                )}
 
                                 {isBatch && expanded === entry.id && (
                                   <tr className="po-sub-row">

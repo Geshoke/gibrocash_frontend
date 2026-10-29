@@ -212,6 +212,12 @@ html.dark .po-sub-row td                   { background: #252f3f !important; }
 html.dark .po-sub-wrap                     { background: #252f3f; }
 html.dark .po-sub-table thead tr           { background: #1a2233; }
 html.dark .po-sub-table td                 { background: #252f3f; }
+html.dark .po-row-expanded td              { background: #263044; }
+html.dark .po-batch-footer                 { color: #9ca3af; }
+html.dark .po-batch-gap,
+html.dark .po-receipt-badge.missing        { background: #3b2a0a; color: #fbd38d; border-color: #975a16; }
+html.dark .po-receipt-badge.has            { background: #1a3328; color: #9ae6b4; border-color: #276749; }
+html.dark .po-batch-voucher-btn            { background: #252f3f; border-color: #4b5563; color: #d1d5db; }
 html.dark .po-expand-btn                   { border-color: #4b5563; color: #6b7280; }
 html.dark .po-expand-btn:hover             { background: #374151; }
 html.dark .po-nav-panel                    { background: #1e2533; border-color: #374151; }

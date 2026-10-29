@@ -654,8 +654,8 @@ const Transactions = () => {
                       {txn.mpesa_code && (
                         <div className="txn-list-mpesa-code">M-Pesa: {txn.mpesa_code}</div>
                       )}
-                      {txn.User?.name && (
-                        <div className="txn-list-uploader">by {txn.User.name}</div>
+                      {txn.user?.name && (
+                        <div className="txn-list-uploader">by {txn.user.name}</div>
                       )}
                     </div>
                   ))}
@@ -976,10 +976,10 @@ const Transactions = () => {
                         <span className="txn-detail-label">Date</span>
                         <span className="txn-detail-value">{formatDate(selectedTransaction.createdAt)} {formatTime(selectedTransaction.createdAt)}</span>
                       </div>
-                      {selectedTransaction.User?.name && (
+                      {selectedTransaction.user?.name && (
                         <div className="txn-detail-field">
                           <span className="txn-detail-label">Uploaded by</span>
-                          <span className="txn-detail-value">{selectedTransaction.User.name}</span>
+                          <span className="txn-detail-value">{selectedTransaction.user.name}</span>
                         </div>
                       )}
                       <div className="txn-detail-field">

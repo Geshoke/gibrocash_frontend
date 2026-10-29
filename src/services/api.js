@@ -101,6 +101,8 @@ export const imprestService = {
 // Transaction endpoints
 export const transactionService = {
   create: (data) => api.post('/create_transaction', data),
+  // Transactions recorded against one M-Pesa payment — a batch payout's line items (needs payout)
+  getByMpesaCode: (code) => api.get(`/transactions/by-mpesa/${encodeURIComponent(code)}`),
   getAll: (userId, page = 1, limit = 50, filters = {}) =>
     api.get('/transactions', {
       params: {
