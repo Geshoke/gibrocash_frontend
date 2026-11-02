@@ -10,6 +10,7 @@ const PERMISSION_CHECKS = {
   payout: (auth) => auth.canPayout(),
   admin: (auth) => auth.isSuperAdmin(),
   store: (auth) => auth.canViewStore(),
+  proposals: (auth) => auth.canViewProposals(),
 };
 
 const TabBar = () => {

@@ -24,7 +24,7 @@ const routeElements = [
   { path: '/dashboard', element: <ProtectedRoute><Dashboard /></ProtectedRoute> },
   { path: '/imprests', element: <ProtectedRoute><Imprests /></ProtectedRoute> },
   { path: '/transactions', element: <ProtectedRoute><Transactions /></ProtectedRoute> },
-  { path: '/proposals', element: <ProtectedRoute><Proposals /></ProtectedRoute> },
+  { path: '/proposals', element: <ProtectedRoute require="proposals"><Proposals /></ProtectedRoute> },
   { path: '/projects', element: <ProtectedRoute><Projects /></ProtectedRoute> },
   { path: '/payouts', element: <ProtectedRoute require="payout"><Payouts /></ProtectedRoute> },
   { path: '/users', element: <ProtectedRoute require="admin"><Users /></ProtectedRoute> },

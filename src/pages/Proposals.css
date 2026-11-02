@@ -508,8 +508,54 @@
 
 .approve-btn:hover,
 .partial-btn:hover,
-.reject-btn:hover {
+.reject-btn:hover,
+.pending-btn:hover {
   opacity: 0.9;
+}
+
+/* Status change controls (edit_proposal_status) */
+.status-actions .action-buttons {
+  flex-wrap: wrap;
+}
+
+.pending-btn {
+  padding: 10px 20px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  background: white;
+  color: #4a5568;
+}
+
+.status-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status-confirm-text {
+  margin: 0;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  color: #2d3748;
+  font-size: 0.9rem;
+}
+
+.status-confirm-text strong {
+  text-transform: capitalize;
+}
+
+.status-confirm-text + .action-buttons {
+  border-top: none;
+  padding-top: 12px;
+}
+
+.status-error {
+  margin: 12px 0 0;
+  color: #c53030;
+  font-size: 0.85rem;
 }
 
 .no-selection,

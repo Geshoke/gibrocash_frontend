@@ -200,6 +200,26 @@ const Users = () => {
     }
   };
 
+  const handleToggleViewProposals = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, view_proposals: value } : u));
+    try {
+      await userService.toggleViewProposals(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update view proposals:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, view_proposals: !value } : u));
+    }
+  };
+
+  const handleToggleEditProposalStatus = async (targetUser, value) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, edit_proposal_status: value } : u));
+    try {
+      await userService.toggleEditProposalStatus(targetUser.id, value);
+    } catch (err) {
+      console.error('Failed to update edit proposal status:', err);
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, edit_proposal_status: !value } : u));
+    }
+  };
+
   const handleToggleRecordClientPayments = async (targetUser, value) => {
     setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, record_client_payments: value } : u));
     try {
@@ -272,6 +292,8 @@ const Users = () => {
                   <th>Client Payments</th>
                   <th>View Store</th>
                   <th>Edit Store</th>
+                  <th>View Proposals</th>
+                  <th>Edit Proposal Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -486,6 +508,29 @@ const Users = () => {
                           type="checkbox"
                           checked={u.edit_store ?? false}
                           onChange={e => handleToggleEditStore(u, e.target.checked)}
+                          disabled={!isSuperAdmin()}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={(u.view_proposals || u.edit_proposal_status) ?? false}
+                          onChange={e => handleToggleViewProposals(u, e.target.checked)}
+                          disabled={!isSuperAdmin() || u.edit_proposal_status}
+                          title={u.edit_proposal_status ? 'Implied by Edit Proposal Status' : undefined}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                    </td>
+                    <td>
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={u.edit_proposal_status ?? false}
+                          onChange={e => handleToggleEditProposalStatus(u, e.target.checked)}
                           disabled={!isSuperAdmin()}
                         />
                         <span className="toggle-slider" />

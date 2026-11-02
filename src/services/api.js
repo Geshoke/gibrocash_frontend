@@ -63,6 +63,8 @@ export const userService = {
   toggleRecordClientPayments: (id, record_client_payments) => api.patch(`/users/${id}/record-client-payments`, { record_client_payments }),
   toggleViewStore: (id, view_store) => api.patch(`/users/${id}/view-store`, { view_store }),
   toggleEditStore: (id, edit_store) => api.patch(`/users/${id}/edit-store`, { edit_store }),
+  toggleViewProposals: (id, view_proposals) => api.patch(`/users/${id}/view-proposals`, { view_proposals }),
+  toggleEditProposalStatus: (id, edit_proposal_status) => api.patch(`/users/${id}/edit-proposal-status`, { edit_proposal_status }),
 };
 
 // Payout recipient directory endpoints
@@ -142,6 +144,7 @@ export const categoryService = {
 // Proposal endpoints
 export const proposalService = {
   create: (data) => api.post('/imprestProposal', data),
+  // { proposalId, status } — needs edit_proposal_status
   updateStatus: (data) => api.patch('/imprestProposal', data),
   getAll: (params) => api.get('/proposals', { params }),
   getById: (id) => api.get(`/proposals/${id}`),

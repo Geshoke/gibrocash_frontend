@@ -8,9 +8,18 @@ const PAGE_LIMIT = 10;
 
 const emptyFilters = { dateFrom: '', dateTo: '', item: '', name: '', userId: '' };
 
+// Status actions offered to users with edit_proposal_status, in display order.
+const STATUS_ACTIONS = [
+  { status: 'approved', label: 'Approve', className: 'approve-btn' },
+  { status: 'partial', label: 'Partially Approve', className: 'partial-btn' },
+  { status: 'rejected', label: 'Reject', className: 'reject-btn' },
+  { status: 'pending', label: 'Back to Pending', className: 'pending-btn' },
+];
+
 const Proposals = () => {
-  const { user, canViewAllImprests } = useAuth();
+  const { user, canViewAllImprests, canEditProposalStatus } = useAuth();
   const admin = canViewAllImprests();
+  const canEditStatus = canEditProposalStatus();
 
   const [proposals, setProposals] = useState([]);
   const [selectedProposal, setSelectedProposal] = useState(null);
@@ -23,6 +32,11 @@ const Proposals = () => {
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Status change (edit_proposal_status only)
+  const [confirmStatus, setConfirmStatus] = useState(null);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState('');
 
   // Comparison
   const [compareMode, setCompareMode] = useState(false);
@@ -109,8 +123,33 @@ const Proposals = () => {
       const response = await proposalService.getById(proposalId);
       const proposal = response.data.proposal ?? response.data;
       setSelectedProposal(proposal);
+      setConfirmStatus(null);
+      setStatusError('');
     } catch (err) {
       console.error('Failed to load proposal details:', err);
+    }
+  };
+
+  const handleChangeStatus = async (newStatus) => {
+    if (!selectedProposal || statusSaving) return;
+    const proposalId = selectedProposal.id;
+    setStatusSaving(true);
+    setStatusError('');
+    try {
+      const res = await proposalService.updateStatus({ proposalId, status: newStatus });
+      if (res.data?.response !== 'success') throw new Error('Proposal not found');
+      setSelectedProposal((prev) => (prev?.id === proposalId ? { ...prev, status: newStatus } : prev));
+      setProposals((prev) => prev.map((p) => (p.id === proposalId ? { ...p, status: newStatus } : p)));
+      setConfirmStatus(null);
+    } catch (err) {
+      console.error('Failed to update proposal status:', err);
+      setStatusError(
+        err.response?.status === 403
+          ? "You don't have permission to change proposal status."
+          : 'Failed to update status. Please try again.'
+      );
+    } finally {
+      setStatusSaving(false);
     }
   };
 
@@ -156,7 +195,7 @@ const Proposals = () => {
         <div className="page-header">
           <div>
             <h1>Proposals</h1>
-            <p>View imprest proposals and their status</p>
+            <p>{canEditStatus ? 'Review imprest proposals and update their status' : 'View imprest proposals and their status'}</p>
           </div>
           {!compareMode && (
             <button className="open-compare-btn" onClick={enterCompareMode} title="Compare proposals">
@@ -433,6 +472,46 @@ const Proposals = () => {
                     </tbody>
                   </table>
                 </div>
+
+                {canEditStatus && (
+                  <div className="status-actions">
+                    {confirmStatus ? (
+                      <>
+                        <p className="status-confirm-text">
+                          Change status from <strong>{selectedProposal.status}</strong> to{' '}
+                          <strong>{confirmStatus.status}</strong>?
+                        </p>
+                        <div className="action-buttons">
+                          <button
+                            className={confirmStatus.className}
+                            onClick={() => handleChangeStatus(confirmStatus.status)}
+                            disabled={statusSaving}
+                          >
+                            {statusSaving ? 'Saving…' : `Yes, ${confirmStatus.label.toLowerCase()}`}
+                          </button>
+                          <button
+                            className="pending-btn"
+                            onClick={() => { setConfirmStatus(null); setStatusError(''); }}
+                            disabled={statusSaving}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="action-buttons">
+                        {STATUS_ACTIONS
+                          .filter((a) => a.status !== selectedProposal.status?.toLowerCase())
+                          .map((a) => (
+                            <button key={a.status} className={a.className} onClick={() => setConfirmStatus(a)}>
+                              {a.label}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                    {statusError && <p className="status-error">{statusError}</p>}
+                  </div>
+                )}
               </>
             ) : (
               <div className="no-selection">

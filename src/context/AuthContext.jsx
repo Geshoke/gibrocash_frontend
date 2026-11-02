@@ -57,6 +57,8 @@ export const AuthProvider = ({ children }) => {
       record_client_payments: profile?.record_client_payments ?? false,
       view_store: profile?.view_store ?? false,
       edit_store: profile?.edit_store ?? false,
+      view_proposals: profile?.view_proposals ?? false,
+      edit_proposal_status: profile?.edit_proposal_status ?? false,
     };
 
     localStorage.setItem('user', JSON.stringify(userObj));
@@ -147,6 +149,15 @@ export const AuthProvider = ({ children }) => {
     return user?.edit_store === true;
   };
 
+  // Editing proposal status implies viewing proposals.
+  const canViewProposals = () => {
+    return user?.view_proposals === true || user?.edit_proposal_status === true;
+  };
+
+  const canEditProposalStatus = () => {
+    return user?.edit_proposal_status === true;
+  };
+
   const value = {
     user,
     login,
@@ -170,6 +181,8 @@ export const AuthProvider = ({ children }) => {
     canRecordClientPayments,
     canViewStore,
     canEditStore,
+    canViewProposals,
+    canEditProposalStatus,
     isAuthenticated: !!user,
     loading,
   };
