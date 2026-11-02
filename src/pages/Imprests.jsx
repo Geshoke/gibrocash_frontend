@@ -46,6 +46,8 @@ const Imprests = () => {
   const [userActionError, setUserActionError] = useState('');
   const [assigningProject, setAssigningProject] = useState(false);
   const [allocatedAmountInput, setAllocatedAmountInput] = useState('');
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
   const [savingAllocatedAmount, setSavingAllocatedAmount] = useState(false);
 
   useEffect(() => {
@@ -212,6 +214,7 @@ const Imprests = () => {
     setSelectedProjectId('');
     setUserActionError('');
     setAllocatedAmountInput(String(imprest.amount || ''));
+    setNameInput(imprest.name || '');
     setLoadingPanel(true);
     try {
       const [usersRes, projectsRes] = await Promise.all([
@@ -233,6 +236,30 @@ const Imprests = () => {
     setSelectedProjectId('');
     setUserActionError('');
     setAllocatedAmountInput('');
+    setNameInput('');
+  };
+
+  const handleRename = async () => {
+    const newName = nameInput.trim();
+    if (!newName) {
+      setUserActionError('Enter a name.');
+      return;
+    }
+    setSavingName(true);
+    setUserActionError('');
+    try {
+      const res = await imprestService.rename(panelImprest.id, newName);
+      const saved = res.data?.name || newName;
+      const updated = { ...panelImprest, name: saved };
+      setPanelImprest(updated);
+      setNameInput(saved);
+      setImprests(prev => prev.map(i => i.id === updated.id ? { ...i, name: saved } : i));
+      if (selectedImprest?.id === updated.id) setSelectedImprest(prev => ({ ...prev, name: saved }));
+    } catch (err) {
+      setUserActionError(err.response?.data?.response || 'Failed to rename imprest.');
+    } finally {
+      setSavingName(false);
+    }
   };
 
   const handleUpdateAllocatedAmount = async () => {
@@ -655,6 +682,29 @@ const Imprests = () => {
               <div className="ip-loading"><div className="spinner"></div></div>
             ) : (
               <div className="ip-body">
+                {/* Name Section */}
+                <div className="ip-section">
+                  <p className="ip-section-label">Name</p>
+                  <div className="ip-row">
+                    <input
+                      type="text"
+                      className="iu-select"
+                      maxLength={255}
+                      value={nameInput}
+                      onChange={e => setNameInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleRename()}
+                      placeholder="Imprest name"
+                    />
+                    <button
+                      className="iu-add-btn"
+                      onClick={handleRename}
+                      disabled={savingName || !nameInput.trim() || nameInput.trim() === panelImprest.name}
+                    >
+                      {savingName ? '...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+
                 {/* Allocated Amount Section */}
                 <div className="ip-section">
                   <p className="ip-section-label">Allocated Amount</p>

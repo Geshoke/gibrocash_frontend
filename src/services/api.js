@@ -65,6 +65,8 @@ export const userService = {
   toggleEditStore: (id, edit_store) => api.patch(`/users/${id}/edit-store`, { edit_store }),
   toggleViewProposals: (id, view_proposals) => api.patch(`/users/${id}/view-proposals`, { view_proposals }),
   toggleEditProposalStatus: (id, edit_proposal_status) => api.patch(`/users/${id}/edit-proposal-status`, { edit_proposal_status }),
+  // Save several access switches at once: { field: boolean, ... }
+  updatePermissions: (id, permissions) => api.patch(`/users/${id}/permissions`, { permissions }),
 };
 
 // Payout recipient directory endpoints
@@ -95,6 +97,7 @@ export const imprestService = {
   getAdminSummary: () => api.get('/adminAllImprestSummation'),
   getAdminTotals: () => api.get('/adminSummaries'),
   updateAmount: (id, amount) => api.patch(`/imprests/${id}/amount`, { amount }),
+  rename: (id, name) => api.patch(`/imprests/${id}/name`, { name }),
   assignUser: (imprestId, userId) => api.post(`/imprests/${imprestId}/users`, { userId }),
   removeUser: (imprestId, userId) => api.delete(`/imprests/${imprestId}/users/${userId}`),
   findOrCreateExpenses: (data) => api.post('/imprests/expenses', data),
