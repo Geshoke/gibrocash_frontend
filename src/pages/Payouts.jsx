@@ -970,6 +970,13 @@ const Payouts = () => {
         clearInterval(timerRef.current);
         setPinExpired(true);
         // PIN expired — no local history push needed; ledger refreshed on close
+      } else if (status === 403 && err.response?.data?.error) {
+        // Rejected by a director from the Telegram alert
+        clearInterval(timerRef.current);
+        setPinError('This payout was rejected by a director.');
+      } else if (status === 429) {
+        clearInterval(timerRef.current);
+        setPinError('Too many incorrect attempts. This payout has been cancelled.');
       } else {
         setPinError('Something went wrong. Please try again.');
       }
@@ -2649,8 +2656,8 @@ const Payouts = () => {
               {modalStep === 'pin' && !pinExpired && (
                 <>
                   <p className="pin-desc">
-                    An SMS with a <strong>5-digit PIN</strong> has been sent to all directors.
-                    Enter it below to authorise this payment.
+                    A <strong>5-digit PIN</strong> has been sent to the directors on Telegram.
+                    If a director approves, it will arrive in your Telegram — enter it below to authorise this payment.
                   </p>
                   <div className="pin-payout-summary">
                     <div className="pin-summary-row">
