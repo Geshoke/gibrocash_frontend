@@ -1,4 +1,5 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { recipientNumberLine, hasConfirmation, confirmationText, confirmationNote } from '../utils/voucherText';
 
 const styles = StyleSheet.create({
   page: {
@@ -115,6 +116,32 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     color: '#1565c0',
   },
+  confirmBlock: {
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#f0fdf4',
+    borderRadius: 4,
+    padding: 10,
+    marginBottom: 16,
+  },
+  confirmLabel: {
+    fontSize: 7,
+    color: '#15803d',
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  confirmText: {
+    fontSize: 9,
+    color: '#14532d',
+    lineHeight: 1.5,
+  },
+  confirmNote: {
+    fontSize: 7,
+    color: '#6b7280',
+    marginTop: 4,
+  },
   footer: {
     position: 'absolute',
     bottom: 24,
@@ -167,6 +194,8 @@ const fmtDate = (d) => {
 
 const PayoutVoucherPDF = ({ voucher }) => {
   if (!voucher) return null;
+  const numberLine = recipientNumberLine(voucher);
+  const showConfirmation = hasConfirmation(voucher);
 
   return (
     <Document>
@@ -194,8 +223,8 @@ const PayoutVoucherPDF = ({ voucher }) => {
         <View style={styles.metaRow}>
           <View style={styles.block}>
             <Text style={styles.label}>Paid To</Text>
-            <Text style={styles.value}>{voucher.recipientName || '—'}</Text>
-            {voucher.recipientPhone ? <Text style={styles.sub}>{voucher.recipientPhone}</Text> : null}
+            <Text style={styles.value}>{voucher.recipientName || numberLine || '—'}</Text>
+            {voucher.recipientName && numberLine ? <Text style={styles.sub}>{numberLine}</Text> : null}
             {voucher.destinationAccount ? <Text style={styles.sub}>Account: {voucher.destinationAccount}</Text> : null}
             {voucher.accountReference ? <Text style={styles.sub}>Reference: {voucher.accountReference}</Text> : null}
           </View>
@@ -204,10 +233,16 @@ const PayoutVoucherPDF = ({ voucher }) => {
               <Text style={styles.label}>Voucher No.</Text>
               <Text style={styles.value}>{voucher.voucherNumber}</Text>
             </View>
-            <View>
+            <View style={styles.metaItem}>
               <Text style={styles.label}>Date</Text>
               <Text style={styles.value}>{fmtDate(voucher.date)}</Text>
             </View>
+            {voucher.paidAt ? (
+              <View>
+                <Text style={styles.label}>Completed on M-Pesa</Text>
+                <Text style={styles.value}>{fmtDate(voucher.paidAt)}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -232,6 +267,15 @@ const PayoutVoucherPDF = ({ voucher }) => {
             </View>
           ) : null}
         </View>
+
+        {/* M-Pesa confirmation — what the payee would see on Safaricom's SMS */}
+        {showConfirmation ? (
+          <View style={styles.confirmBlock}>
+            <Text style={styles.confirmLabel}>M-Pesa Confirmation</Text>
+            <Text style={styles.confirmText}>{confirmationText(voucher)}</Text>
+            <Text style={styles.confirmNote}>{confirmationNote(voucher)}</Text>
+          </View>
+        ) : null}
 
         {/* Description */}
         <View style={styles.descBlock}>

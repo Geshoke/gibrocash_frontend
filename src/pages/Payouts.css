@@ -1597,6 +1597,18 @@
 }
 .voucher-desc-block p { margin: 4px 0 0; font-size: 0.85rem; color: #475569; line-height: 1.5; }
 
+/* M-Pesa confirmation line, worded like Safaricom's SMS */
+.voucher-confirm-block {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.voucher-confirm-block .voucher-label { color: #15803d; }
+.voucher-confirm-block p { margin: 4px 0; font-size: 0.85rem; color: #14532d; line-height: 1.5; user-select: all; }
+.voucher-confirm-block small { font-size: 0.72rem; color: #6b7280; }
+
 .voucher-amount-row {
   display: flex;
   justify-content: space-between;

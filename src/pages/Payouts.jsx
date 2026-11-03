@@ -7,6 +7,7 @@ import RecipientPicker from '../components/RecipientPicker';
 import SavedPayouts, { LoadedDraftBanner, SaveDraftDialog } from '../components/SavedPayouts';
 import { DRAFT_VERSION, buildDraft, checkDraft } from '../utils/payoutDrafts';
 import PayoutVoucherPDF from '../components/PayoutVoucherPDF';
+import { recipientNumberLine, hasConfirmation, confirmationText, confirmationNote } from '../utils/voucherText';
 import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Payouts.css';
 
@@ -63,23 +64,54 @@ const VAT_RATE = 0.16;
 
 const TYPE_LABEL = { payroll: 'Payroll', single: 'Single Payment', b2b: 'B2B Payment', txn_payout: 'Transaction Payout', batch_payout: 'Batch Payout' };
 
+// Transaction Payout form. recipient: 'phone' pays a person (B2C); 'paybill' / 'till' pay a
+// business (B2B).
+const EMPTY_TXN_PAYOUT = {
+  projectId: '', recipient: 'phone', contact: '',
+  paybillNumber: '', accountNumber: '', tillNumber: '',
+  amount: '', description: '',
+};
+
+const txnRecipientLabel = (t) => (
+  t.recipient === 'paybill' ? `Paybill ${t.paybillNumber.trim()} — Acc ${t.accountNumber.trim()}`
+  : t.recipient === 'till'  ? `Till ${t.tillNumber.trim()}`
+  : t.contact
+);
+
 // ── Payment voucher builders ─────────────────────────────────────
 // Voucher numbers are derived entirely from data already on the ledger
 // entry (its id) — no backend column or migration needed.
-const buildVoucher = (entry) => ({
-  voucherNumber:      `PV-${String(entry.id).toUpperCase()}`,
-  date:               entry.date,
-  status:             entry.status,
-  type:               entry.type,
-  description:        entry.label,
-  amount:             entry.amount,
-  initiatedBy:        entry.initiatedBy,
-  recipientName:      entry.payload?.receiverPublicName || null,
-  recipientPhone:     entry.payload?.partyB || null,
-  mpesaCode:          entry.payload?.transactionReceipt || null,
-  accountReference:   entry.payload?.accountReference || null,
-  destinationAccount: entry.payload?.destinationAccount || null,
-});
+// M-Pesa reports the receiver as "<number> - <name>"; the voucher shows the number separately.
+const stripPartyNumber = (name) => (name ? String(name).replace(/^\s*\d+\s*-\s*/, '').trim() || null : null);
+
+const recipientKindFor = (commandId) => (
+  commandId === 'BusinessBuyGoods' ? 'till'
+  : commandId === 'BusinessPayBill' ? 'paybill'
+  : 'phone'
+);
+
+const buildVoucher = (entry) => {
+  const kind    = recipientKindFor(entry.payload?.commandId);
+  const account = entry.payload?.destinationAccount || null;
+  const ref     = entry.payload?.accountReference || null;
+  return {
+    voucherNumber:      `PV-${String(entry.id).toUpperCase()}`,
+    date:               entry.date,
+    paidAt:             entry.payload?.transactionCompletedAt || null,
+    status:             entry.status,
+    type:               entry.type,
+    description:        entry.label,
+    amount:             entry.amount,
+    initiatedBy:        entry.initiatedBy,
+    recipientName:      stripPartyNumber(entry.payload?.receiverPublicName),
+    recipientKind:      kind,
+    recipientPhone:     entry.payload?.partyB || null,
+    mpesaCode:          entry.payload?.transactionReceipt || null,
+    // A paybill's reference is its account number, so it is only shown when it differs.
+    accountReference:   ref && ref !== account ? ref : null,
+    destinationAccount: account,
+  };
+};
 
 const buildPayrollRowVoucher = (entry, row) => ({
   voucherNumber:  `PV-${String(entry.id).toUpperCase()}-${String(row.staffNo || row._id || '').toUpperCase()}`,
@@ -188,7 +220,7 @@ const Payouts = () => {
   // ── Transaction Payout ───────────────────────────────────────
   // Transaction payouts are always recorded in the project's Expenses imprest. Choosing a
   // specific imprest was removed: those payouts raised used without raising allocated.
-  const [txnPayout, setTxnPayout]           = useState({ projectId: '', contact: '', amount: '', description: '' });
+  const [txnPayout, setTxnPayout]           = useState(EMPTY_TXN_PAYOUT);
   const [txnRequesting, setTxnRequesting]   = useState(false);
   const [txnSuccess, setTxnSuccess]         = useState('');
 
@@ -368,6 +400,7 @@ const Payouts = () => {
               partyB:             p.partyB,
               transactionReceipt: p.transactionReceipt,
               receiverPublicName: p.receiverPublicName,
+              transactionCompletedAt: p.transactionCompletedAt || p.completedAt || null,
             },
           }))
         : [];
@@ -375,8 +408,8 @@ const Payouts = () => {
       const b2bPayments = b2bResult.status === 'fulfilled'
         ? (b2bResult.value.data.payments || []).map(p => ({
             id:          `b2b-${p.id}`,
-            type:        'b2b',
-            label:       p.remarks || '—',
+            type:        p.occasion || 'b2b',
+            label:       p.description || p.remarks || '—',
             amount:      parseFloat(p.amount),
             date:        p.initiatedAt,
             status:      mapDbStatus(p.status),
@@ -387,6 +420,8 @@ const Payouts = () => {
               destinationAccount: p.destinationAccount,
               commandId:          p.commandId,
               transactionReceipt: p.transactionReceipt,
+              receiverPublicName: p.receiverPublicName,
+              transactionCompletedAt: p.transactionCompletedAt || p.completedAt || null,
             },
           }))
         : [];
@@ -405,39 +440,53 @@ const Payouts = () => {
     } catch { /* balance display is best-effort */ }
   };
 
+  // Phone (B2C) and till/paybill (B2B) txn_payouts are tracked in separate tables; each
+  // entry remembers its channel so the retry marks the right one as recorded.
   const fetchUnrecordedTxnPayouts = async () => {
-    try {
-      const { data } = await payoutService.getUnrecordedTxnPayouts();
-      const entries = (data.payments || []).map(p => ({
-        id: `server-${p.originatorConversationId}`,
-        createdAt: p.initiatedAt,
-        payoutLabel: p.remarks || '—',
-        payoutAmount: parseFloat(p.amount),
-        imprestName: p.payoutMeta?.imprestName || 'Expenses',
-        imprestProject: p.payoutMeta?.imprestProject || null,
-        isServerEntry: true,
-        originatorConversationId: p.originatorConversationId,
-        financeTransactionId: p.payoutMeta?.financeTransactionId || null,
-        mpesaCode: p.transactionReceipt || null,
-        mpesaPhone: p.partyB || null,
-        mpesaRecipientName: p.receiverPublicName || null,
-        transactionData: {
-          imprestAccount_id: p.payoutMeta?.imprestId   || null,
-          projectId:         p.payoutMeta?.projectId   || null,
-          item:              p.payoutMeta?.description || '',
-          itemQuantity:      1,
-          unitPrice:         parseFloat(p.amount),
-          Total_amount:      parseFloat(p.amount),
-          userID:            p.payoutMeta?.userId      || null,
-          vat_charged:       0,
-          url_image:         null,
-          mpesa_code:            p.transactionReceipt || null,
-          mpesa_recipient_phone: p.partyB || null,
-          mpesa_recipient_name:  p.receiverPublicName || null,
-        },
-      }));
-      setServerFailedTxns(entries);
-    } catch { /* silent — server entries are a recovery aid, not critical */ }
+    const [b2cResult, b2bResult] = await Promise.allSettled([
+      payoutService.getUnrecordedTxnPayouts(),
+      payoutService.getUnrecordedB2bTxnPayouts(),
+    ]);
+    // Server entries are a recovery aid, not critical — if both fail, keep what's shown.
+    if (b2cResult.status === 'rejected' && b2bResult.status === 'rejected') return;
+    const tagged = [
+      ...(b2cResult.status === 'fulfilled' ? (b2cResult.value.data.payments || []).map(p => ({ ...p, channel: 'b2c' })) : []),
+      ...(b2bResult.status === 'fulfilled' ? (b2bResult.value.data.payments || []).map(p => ({ ...p, channel: 'b2b' })) : []),
+    ];
+    // A till/paybill may not report a public name; fall back to its number.
+    const recipientName = (p) => p.receiverPublicName || (p.channel !== 'b2b' ? null
+      : p.commandId === 'BusinessBuyGoods' ? `Till ${p.partyB}`
+      : `Paybill ${p.partyB}${p.destinationAccount ? ` — Acc ${p.destinationAccount}` : ''}`);
+    const entries = tagged.map(p => ({
+      id: `server-${p.channel}-${p.originatorConversationId}`,
+      channel: p.channel,
+      createdAt: p.initiatedAt,
+      payoutLabel: p.description || p.remarks || '—',
+      payoutAmount: parseFloat(p.amount),
+      imprestName: p.payoutMeta?.imprestName || 'Expenses',
+      imprestProject: p.payoutMeta?.imprestProject || null,
+      isServerEntry: true,
+      originatorConversationId: p.originatorConversationId,
+      financeTransactionId: p.payoutMeta?.financeTransactionId || null,
+      mpesaCode: p.transactionReceipt || null,
+      mpesaPhone: p.partyB || null,
+      mpesaRecipientName: recipientName(p),
+      transactionData: {
+        imprestAccount_id: p.payoutMeta?.imprestId   || null,
+        projectId:         p.payoutMeta?.projectId   || null,
+        item:              p.payoutMeta?.description || '',
+        itemQuantity:      1,
+        unitPrice:         parseFloat(p.amount),
+        Total_amount:      parseFloat(p.amount),
+        userID:            p.payoutMeta?.userId      || null,
+        vat_charged:       0,
+        url_image:         null,
+        mpesa_code:            p.transactionReceipt || null,
+        mpesa_recipient_phone: p.partyB || null,
+        mpesa_recipient_name:  recipientName(p),
+      },
+    }));
+    setServerFailedTxns(entries);
   };
 
   // ── Saved payouts ────────────────────────────────────────────
@@ -514,7 +563,7 @@ const Payouts = () => {
   const clearForm = (type) => {
     if (type === 'single') setSingle({ contact: '', amount: '', description: '' });
     if (type === 'txn_payout') {
-      setTxnPayout({ projectId: '', contact: '', amount: '', description: '' });
+      setTxnPayout(EMPTY_TXN_PAYOUT);
       setProjectSearch('');
     }
     if (type === 'batch_payout') { setBatchItems([]); setBatchPhone(''); setBatchSubmitError(''); }
@@ -547,7 +596,7 @@ const Payouts = () => {
 
   const formHasData = (type) => {
     if (type === 'single') return !!(single.contact || single.amount || single.description);
-    if (type === 'txn_payout') return !!(txnPayout.projectId || txnPayout.contact || txnPayout.amount || txnPayout.description);
+    if (type === 'txn_payout') return !!(txnPayout.projectId || txnPayout.contact || txnPayout.paybillNumber || txnPayout.accountNumber || txnPayout.tillNumber || txnPayout.amount || txnPayout.description);
     return batchItems.length > 0 || !!batchPhone;
   };
 
@@ -567,7 +616,8 @@ const Payouts = () => {
         setView('single');
       } else if (draft.type === 'txn_payout') {
         const { projectLabel, ...fields } = form;
-        setTxnPayout(fields);
+        // Saved payouts are phone-only, so this always lands in phone mode.
+        setTxnPayout({ ...EMPTY_TXN_PAYOUT, ...fields, recipient: 'phone' });
         setProjectSearch(projectLabel);
         setTxnMode('single');
         setView('txn_payout');
@@ -844,9 +894,12 @@ const Payouts = () => {
       setModalStep('record');
     };
 
+    // A till/paybill Transaction Payout is tracked on the B2B side.
+    const channel = modalRef.current?.payload?.channel || 'b2c';
+
     pollRef.current = setInterval(async () => {
       try {
-        const { data } = await payoutService.checkB2cStatus(ocid);
+        const { data } = await payoutService.checkPayoutStatus(ocid, channel);
         if (data.status === 'success') {
           clearInterval(pollRef.current);
           fetchLedger(); // update ledger immediately on confirmed success
@@ -1175,13 +1228,22 @@ const Payouts = () => {
 
   // ── Transaction Payout handlers ──────────────────────────────
   const submitTxnPayout = async () => {
-    const { projectId, contact, amount, description } = txnPayout;
-    if (!projectId || !contact.trim() || !amount || txnRequesting) return;
+    const { projectId, amount, description, recipient } = txnPayout;
+    if (!txnPayoutReady || txnRequesting) return;
+    const isB2b  = recipient === 'paybill' || recipient === 'till';
     const selectedProject = projects.find(p => p.id === projectId) || null;
-    const label  = `Payment to ${contact}`;
+    const label  = `Payment to ${txnRecipientLabel(txnPayout)}`;
     const amt    = parseFloat(amount) || 0;
+    const target = isB2b
+      ? {
+          b2bType:       recipient,
+          paybillNumber: recipient === 'paybill' ? txnPayout.paybillNumber.trim() : undefined,
+          accountNumber: recipient === 'paybill' ? txnPayout.accountNumber.trim() : undefined,
+          tillNumber:    recipient === 'till'    ? txnPayout.tillNumber.trim()    : undefined,
+        }
+      : { phoneNumber: normalizePhone(txnPayout.contact) };
     const payload = {
-      phoneNumber:    normalizePhone(contact),
+      ...target,
       amount:         amt,
       remarks:        description || 'Transaction Payout',
       description,
@@ -1193,19 +1255,22 @@ const Payouts = () => {
       imprestProject: selectedProject?.name || null,
     };
     setTxnRequesting(true);
-    const draftId = await claimLoadedDraft('txn_payout');
+    // Saved payouts are phone-only; a till/paybill payout never uses up a draft.
+    const draftId = isB2b ? null : await claimLoadedDraft('txn_payout');
     if (draftId === false) { setTxnRequesting(false); return; }
     try {
       const { data } = await payoutService.request({ type: 'txn_payout', payload, label, amount: amt, initiatedBy: user.name });
       setModalStep('pin');
       openModal('txn_payout', label, amt, {
         ...txnPayout,
+        channel: isB2b ? 'b2b' : 'b2c',
+        recipientLabel: txnRecipientLabel(txnPayout),
         project: selectedProject,
         imprest: null,
       }, data.payoutId, draftId);
-    } catch {
+    } catch (err) {
       releaseDraft(draftId);
-      alert('Failed to initiate payout. Please try again.');
+      alert(err.response?.data?.error || 'Failed to initiate payout. Please try again.');
     } finally {
       setTxnRequesting(false);
     }
@@ -1254,21 +1319,24 @@ const Payouts = () => {
       url_image:         imageFilename,
       mpesa_code:            modal?.payload?.mpesaCode || null,
       mpesa_recipient_phone: modal?.payload?.mpesaPhone || null,
-      mpesa_recipient_name:  modal?.payload?.mpesaRecipientName || null,
+      // A till/paybill may not report a public name; fall back to "Till 123456" etc.
+      mpesa_recipient_name:  modal?.payload?.mpesaRecipientName
+        || (modal?.payload?.channel === 'b2b' ? modal?.payload?.recipientLabel || null : null),
     };
+    const channel = modal?.payload?.channel || 'b2c';
 
     try {
       const { data: createdTxn } = await transactionService.create(txnData);
       // Best-effort — don't block UI on failure. Link first so that if markTxnRecorded
       // itself fails, a later retry can attach a receipt instead of creating a duplicate.
       if (ocid) {
-        payoutService.setFinanceTransaction(ocid, createdTxn.transaction.id).catch(() => {});
-        payoutService.markTxnRecorded(ocid).catch(() => {});
+        payoutService.setFinanceTransaction(ocid, createdTxn.transaction.id, channel).catch(() => {});
+        payoutService.markTxnRecorded(ocid, channel).catch(() => {});
         setServerFailedTxns(prev => prev.filter(e => e.originatorConversationId !== ocid));
       }
       setModal(null);
       setModalStep('pin');
-      setTxnPayout({ projectId: '', contact: '', amount: '', description: '' });
+      setTxnPayout(EMPTY_TXN_PAYOUT);
       setProjectSearch('');
       setTxnForm({ item: '', vatEnabled: false });
       setTxnImageFile(null);
@@ -1337,7 +1405,7 @@ const Payouts = () => {
           await transactionService.uploadReceipt(retryEntry.financeTransactionId, fd);
         }
         if (retryEntry.originatorConversationId) {
-          payoutService.markTxnRecorded(retryEntry.originatorConversationId).catch(() => {});
+          payoutService.markTxnRecorded(retryEntry.originatorConversationId, retryEntry.channel || 'b2c').catch(() => {});
         }
         setServerFailedTxns(prev => prev.filter(e => e.id !== retryEntry.id));
         setRetryEntry(null);
@@ -1409,7 +1477,7 @@ const Payouts = () => {
     try {
       await transactionService.create(txnData);
       if (retryEntry.isServerEntry && retryEntry.originatorConversationId) {
-        payoutService.markTxnRecorded(retryEntry.originatorConversationId).catch(() => {});
+        payoutService.markTxnRecorded(retryEntry.originatorConversationId, retryEntry.channel || 'b2c').catch(() => {});
         setServerFailedTxns(prev => prev.filter(e => e.id !== retryEntry.id));
       } else {
         setFailedTxns(prev => prev.filter(f => f.id !== retryEntry.id));
@@ -1425,7 +1493,12 @@ const Payouts = () => {
     }
   };
 
-  const txnPayoutReady = txnPayout.projectId && txnPayout.contact.trim() && txnPayout.amount;
+  const txnRecipientReady =
+    txnPayout.recipient === 'paybill' ? !!(txnPayout.paybillNumber.trim() && txnPayout.accountNumber.trim())
+    : txnPayout.recipient === 'till'  ? !!txnPayout.tillNumber.trim()
+    : !!txnPayout.contact.trim();
+  const txnPayoutReady = !!(txnPayout.projectId && txnRecipientReady && txnPayout.amount);
+  const txnIsB2b = txnPayout.recipient === 'paybill' || txnPayout.recipient === 'till';
 
   // ── Batch payout handlers ────────────────────────────────────
   const addBatchItem = () => {
@@ -2051,7 +2124,9 @@ const Payouts = () => {
                   {loadedDraft?.draft.type === 'txn_payout' && (
                     <LoadedDraftBanner draft={loadedDraft.draft} warnings={loadedDraft.warnings} error={draftError} onDetach={detachDraft} />
                   )}
-                  <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
+                  {!txnIsB2b && (
+                    <p className="po-min-notice">Minimum transaction amount: <strong>KES 10</strong> (Safaricom B2C limit)</p>
+                  )}
 
                   {/* Step 1 — Select Project */}
                   <div className="po-txp-section-label">Step 1 — Select Project <span className="po-txp-required">*</span></div>
@@ -2106,14 +2181,47 @@ const Payouts = () => {
 
                   {/* Step 2 — Payment details */}
                   <div className="po-txp-section-label">Step 2 — Payment Details</div>
-                  <div className="po-field">
-                    <label>Recipient Phone Number</label>
-                    <RecipientPicker
-                      value={txnPayout.contact}
-                      onChange={v => setTxnPayout(p => ({ ...p, contact: v }))}
-                      recipients={contacts.map(c => ({ id: c.id, name: c.name, phone: c.phoneNumber }))}
-                    />
+                  <div className="po-toggle-group">
+                    {[['phone', 'Phone'], ['paybill', 'Paybill'], ['till', 'Till Number']].map(([key, text]) => (
+                      <button key={key}
+                        className={`po-toggle-opt ${txnPayout.recipient === key ? 'active' : ''}`}
+                        // A saved payout is phone-only, so switching away from phone is blocked while one is loaded.
+                        disabled={key !== 'phone' && loadedDraft?.draft.type === 'txn_payout'}
+                        onClick={() => setTxnPayout(p => ({ ...p, recipient: key }))}>{text}</button>
+                    ))}
                   </div>
+                  {txnPayout.recipient === 'paybill' ? (
+                    <>
+                      <div className="po-field">
+                        <label>Paybill Number</label>
+                        <input type="text" inputMode="numeric" value={txnPayout.paybillNumber}
+                          onChange={e => setTxnPayout(p => ({ ...p, paybillNumber: e.target.value }))}
+                          placeholder="e.g. 400200" />
+                      </div>
+                      <div className="po-field">
+                        <label>Account Number</label>
+                        <input type="text" maxLength={13} value={txnPayout.accountNumber}
+                          onChange={e => setTxnPayout(p => ({ ...p, accountNumber: e.target.value }))}
+                          placeholder="e.g. ACC123456" />
+                      </div>
+                    </>
+                  ) : txnPayout.recipient === 'till' ? (
+                    <div className="po-field">
+                      <label>Till Number</label>
+                      <input type="text" inputMode="numeric" value={txnPayout.tillNumber}
+                        onChange={e => setTxnPayout(p => ({ ...p, tillNumber: e.target.value }))}
+                        placeholder="e.g. 123456" />
+                    </div>
+                  ) : (
+                    <div className="po-field">
+                      <label>Recipient Phone Number</label>
+                      <RecipientPicker
+                        value={txnPayout.contact}
+                        onChange={v => setTxnPayout(p => ({ ...p, contact: v }))}
+                        recipients={contacts.map(c => ({ id: c.id, name: c.name, phone: c.phoneNumber }))}
+                      />
+                    </div>
+                  )}
                   <div className="po-field">
                     <label>Amount (KES)</label>
                     <input
@@ -2133,9 +2241,9 @@ const Payouts = () => {
                     />
                   </div>
 
-                  {txnPayout.contact && txnPayout.amount && txnPayout.projectId && (
+                  {txnPayoutReady && (
                     <div className="po-preview">
-                      Sending <strong>{fmtCur(txnPayout.amount)}</strong> to <strong>{txnPayout.contact}</strong>
+                      Sending <strong>{fmtCur(txnPayout.amount)}</strong> to <strong>{txnRecipientLabel(txnPayout)}</strong>
                       {' '}— recorded in <strong>{projects.find(p => p.id === txnPayout.projectId)?.name} / Expenses</strong>
                     </div>
                   )}
@@ -2149,7 +2257,8 @@ const Payouts = () => {
                       {txnRequesting ? 'Sending SMS…' : 'Initiate Transaction Payout'}
                     </button>
                     <button className="po-save-draft-btn" onClick={() => openSaveDialog('txn_payout')}
-                      disabled={!txnPayoutReady || !(parseFloat(txnPayout.amount) > 0) || txnRequesting}>
+                      disabled={txnIsB2b || !txnPayoutReady || !(parseFloat(txnPayout.amount) > 0) || txnRequesting}
+                      title={txnIsB2b ? 'Only phone payouts can be saved for later' : undefined}>
                       {loadedDraft?.draft.type === 'txn_payout' ? 'Update saved payout' : 'Save for later'}
                     </button>
                     {!txnPayout.projectId && (
@@ -2536,7 +2645,7 @@ const Payouts = () => {
                     </div>
                     <div className="pin-summary-row">
                       <span className="psr-label">Recipient</span>
-                      <span className="psr-val">{modal?.payload?.contact}</span>
+                      <span className="psr-val">{modal?.payload?.recipientLabel || modal?.payload?.contact}</span>
                     </div>
                   </div>
                   {showPollEscape && (
@@ -2891,12 +3000,20 @@ const Payouts = () => {
                   <span className="voucher-label">Date</span>
                   <span className="voucher-value">{fmtDate(voucher.date)}</span>
                 </div>
+                {voucher.paidAt && (
+                  <div>
+                    <span className="voucher-label">Completed on M-Pesa</span>
+                    <span className="voucher-value">{fmtDate(voucher.paidAt)}</span>
+                  </div>
+                )}
               </div>
 
               <div className="voucher-section">
                 <span className="voucher-label">Paid To</span>
-                <div className="voucher-value big">{voucher.recipientName || '—'}</div>
-                {voucher.recipientPhone && <div className="voucher-sub">{voucher.recipientPhone}</div>}
+                <div className="voucher-value big">{voucher.recipientName || recipientNumberLine(voucher) || '—'}</div>
+                {voucher.recipientName && recipientNumberLine(voucher) && (
+                  <div className="voucher-sub">{recipientNumberLine(voucher)}</div>
+                )}
                 {voucher.destinationAccount && <div className="voucher-sub">Account: {voucher.destinationAccount}</div>}
                 {voucher.accountReference && <div className="voucher-sub">Reference: {voucher.accountReference}</div>}
               </div>
@@ -2921,6 +3038,14 @@ const Payouts = () => {
                   </div>
                 )}
               </div>
+
+              {hasConfirmation(voucher) && (
+                <div className="voucher-confirm-block">
+                  <span className="voucher-label">M-Pesa Confirmation</span>
+                  <p>{confirmationText(voucher)}</p>
+                  <small>{confirmationNote(voucher)}</small>
+                </div>
+              )}
 
               <div className="voucher-desc-block">
                 <span className="voucher-label">Description</span>

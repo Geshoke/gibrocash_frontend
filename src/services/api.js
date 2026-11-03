@@ -247,6 +247,11 @@ export const payoutService = {
   checkB2cStatus: (originatorConversationId) =>
     paybillApi.get(`/shortcode_3576329/b2c/payments/status/${originatorConversationId}`),
 
+  // Poll status of a txn_payout on either channel ('b2c' = phone, 'b2b' = till/paybill).
+  // Both endpoints return the same shape.
+  checkPayoutStatus: (originatorConversationId, channel = 'b2c') =>
+    paybillApi.get(`/shortcode_3576329/${channel}/payments/status/${originatorConversationId}`),
+
   // Fetch persisted B2C payment ledger from DB
   getPayments: () =>
     paybillApi.get('/shortcode_3576329/b2c/payments'),
@@ -263,14 +268,18 @@ export const payoutService = {
   getUnrecordedTxnPayouts: () =>
     paybillApi.get('/shortcode_3576329/b2c/payments/unrecorded'),
 
+  // Same, for txn_payouts paid to a till/paybill
+  getUnrecordedB2bTxnPayouts: () =>
+    paybillApi.get('/shortcode_3576329/b2b/payments/unrecorded'),
+
   // Mark a txn_payout as having its imprest transaction recorded
-  markTxnRecorded: (originatorConversationId) =>
-    paybillApi.patch(`/shortcode_3576329/b2c/payments/${originatorConversationId}/txn-recorded`),
+  markTxnRecorded: (originatorConversationId, channel = 'b2c') =>
+    paybillApi.patch(`/shortcode_3576329/${channel}/payments/${originatorConversationId}/txn-recorded`),
 
   // Link a txn_payout to the GibroCash transaction created for it, so a retry (e.g. if
   // markTxnRecorded itself fails) can attach a receipt instead of creating a duplicate
-  setFinanceTransaction: (originatorConversationId, transactionId) =>
-    paybillApi.patch(`/shortcode_3576329/b2c/payments/${originatorConversationId}/finance-transaction`, { transactionId }),
+  setFinanceTransaction: (originatorConversationId, transactionId, channel = 'b2c') =>
+    paybillApi.patch(`/shortcode_3576329/${channel}/payments/${originatorConversationId}/finance-transaction`, { transactionId }),
 };
 
 // Invoice endpoints
