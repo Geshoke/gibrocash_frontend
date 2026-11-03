@@ -7,7 +7,7 @@ import RecipientPicker from '../components/RecipientPicker';
 import SavedPayouts, { LoadedDraftBanner, SaveDraftDialog } from '../components/SavedPayouts';
 import { DRAFT_VERSION, buildDraft, checkDraft } from '../utils/payoutDrafts';
 import PayoutVoucherPDF from '../components/PayoutVoucherPDF';
-import { recipientNumberLine, hasConfirmation, confirmationText, confirmationNote } from '../utils/voucherText';
+import { COMPANY, recipientNumberLine, hasConfirmation, confirmationText, confirmationNote } from '../utils/voucherText';
 import { useTabRefresh } from '../hooks/useTabRefresh';
 import './Payouts.css';
 
@@ -2976,8 +2976,8 @@ const Payouts = () => {
           <div className="voucher-modal" onClick={(e) => e.stopPropagation()}>
             <div className="voucher-modal-head">
               <div className="voucher-company">
-                <div className="voucher-company-name">GIBRO Enterprise LTD</div>
-                <div className="voucher-company-meta">Likoni Road, Nairobi · +254710341246</div>
+                <div className="voucher-company-name">{COMPANY.name}</div>
+                <div className="voucher-company-meta">{COMPANY.address} · {COMPANY.phone}</div>
               </div>
               <button className="voucher-close-btn" onClick={() => setVoucher(null)} aria-label="Close">×</button>
             </div>

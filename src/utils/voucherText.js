@@ -1,6 +1,9 @@
 // Text shared by the on-screen payment voucher and its PDF.
 
-export const PAYER_NAME = 'GIBRO Enterprise LTD';
+import { COMPANY } from './company';
+
+export { COMPANY };
+export const PAYER_NAME = COMPANY.name;
 
 const fmtKes = (n) =>
   new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n || 0);

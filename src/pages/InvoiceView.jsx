@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { invoiceService } from '../services/api';
 import InvoicePDF from '../components/InvoicePDF';
+import logo from '../assets/gibroLogo.png';
+import { COMPANY } from '../utils/company';
 import './InvoiceView.css';
 
 const STATUS_OPTIONS = ['draft', 'sent', 'paid'];
@@ -127,17 +129,14 @@ const InvoiceView = () => {
           {/* Company header */}
           <div className="inv-header">
             <div className="inv-company">
-              <div className="company-name">GIBRO Enterprise LTD</div>
+              <div className="company-name">{COMPANY.name}</div>
               <div className="company-meta">
-                Likoni Road, NAIROBI, NAIROBI 00100 KE<br />
-                +254710341246 · info@gibroenterprise.co.ke<br />
-                PIN P051595908Z
+                {COMPANY.address}<br />
+                {COMPANY.phone} · {COMPANY.email}<br />
+                PIN {COMPANY.pin}
               </div>
             </div>
-            <div className="inv-logo-placeholder">
-              <span className="logo-text">GIBRO</span>
-              <span className="logo-sub">ENTERPRISE LTD</span>
-            </div>
+            <img className="inv-logo" src={logo} alt={COMPANY.name} />
           </div>
 
           <div className="inv-title">Tax Invoice</div>

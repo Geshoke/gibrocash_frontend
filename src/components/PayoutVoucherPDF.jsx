@@ -1,5 +1,6 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
-import { recipientNumberLine, hasConfirmation, confirmationText, confirmationNote } from '../utils/voucherText';
+import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer';
+import logo from '../assets/gibroLogo.png';
+import { COMPANY, recipientNumberLine, hasConfirmation, confirmationText, confirmationNote } from '../utils/voucherText';
 
 const styles = StyleSheet.create({
   page: {
@@ -23,22 +24,10 @@ const styles = StyleSheet.create({
     color: '#555',
     lineHeight: 1.5,
   },
-  logoPlaceholder: {
-    width: 120,
-    height: 60,
-    borderRadius: 4,
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    fontSize: 10,
-    fontFamily: 'Helvetica-Bold',
-    color: '#1565c0',
-  },
-  logoSub: {
-    fontSize: 7,
-    color: '#1565c0',
+  // gibroLogo.png is 663×474; keep that ratio.
+  logo: {
+    width: 100,
+    height: 71.5,
   },
   title: {
     fontSize: 16,
@@ -204,13 +193,12 @@ const PayoutVoucherPDF = ({ voucher }) => {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.companyName}>GIBRO Enterprise LTD</Text>
-            <Text style={styles.companyMeta}>Likoni Road{'\n'}NAIROBI, NAIROBI 00100 KE{'\n'}+254710341246{'\n'}info@gibroenterprise.co.ke{'\n'}PIN P051595908Z</Text>
+            <Text style={styles.companyName}>{COMPANY.name}</Text>
+            <Text style={styles.companyMeta}>
+              {COMPANY.address}{'\n'}{COMPANY.phone}{'\n'}{COMPANY.email}{'\n'}PIN {COMPANY.pin}
+            </Text>
           </View>
-          <View style={styles.logoPlaceholder}>
-            <Text style={styles.logoText}>GIBRO</Text>
-            <Text style={styles.logoSub}>ENTERPRISE LTD</Text>
-          </View>
+          <Image src={logo} style={styles.logo} />
         </View>
 
         {/* Title + status */}
