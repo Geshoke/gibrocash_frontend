@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { clientPaymentService, imageService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const PAYMENT_METHODS = [
   { value: 'mpesa_paybill', label: 'M-Pesa – Paybill 3576329' },
@@ -47,11 +48,15 @@ const emptyForm = () => ({
 });
 
 /**
- * Client payments for one project. Only rendered for users with the
- * record_client_payments permission (the backend enforces it as well).
+ * Client payments for one project. Only rendered for users who can view
+ * client payments; recording needs Add and removing needs Delete (the
+ * backend enforces all three as well).
  * Reports the running total through onTotalChange for the summary card.
  */
 const ClientPayments = ({ projectId, onTotalChange }) => {
+  const { canRecordClientPayments, canDeleteClientPayments } = useAuth();
+  const canAdd = canRecordClientPayments();
+  const canDelete = canDeleteClientPayments();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(readCollapsed);
@@ -168,7 +173,7 @@ const ClientPayments = ({ projectId, onTotalChange }) => {
             )}
           </button>
         </h3>
-        <button className="edit-project-btn" onClick={openRecord}>+ Record Payment</button>
+        {canAdd && <button className="edit-project-btn" onClick={openRecord}>+ Record Payment</button>}
       </div>
 
       {collapsed ? null : loading ? (
@@ -189,7 +194,7 @@ const ClientPayments = ({ projectId, onTotalChange }) => {
                 <th>Reference</th>
                 <th className="cp-num">Amount</th>
                 <th>Recorded by</th>
-                <th></th>
+                {canDelete && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -207,11 +212,13 @@ const ClientPayments = ({ projectId, onTotalChange }) => {
                   </td>
                   <td className="cp-num">{fmtCur(p.amount)}</td>
                   <td>{p.recorder?.name || '—'}</td>
-                  <td>
-                    <button className="cp-remove-btn" title="Remove payment" onClick={() => { setRemoving(p); setRemoveReason(''); setRemoveError(''); }}>
-                      ✕
-                    </button>
-                  </td>
+                  {canDelete && (
+                    <td>
+                      <button className="cp-remove-btn" title="Remove payment" onClick={() => { setRemoving(p); setRemoveReason(''); setRemoveError(''); }}>
+                        ✕
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -219,7 +226,7 @@ const ClientPayments = ({ projectId, onTotalChange }) => {
               <tr>
                 <td colSpan={5}><strong>Total received</strong></td>
                 <td className="cp-num"><strong>{fmtCur(total)}</strong></td>
-                <td colSpan={2}></td>
+                <td colSpan={canDelete ? 2 : 1}></td>
               </tr>
             </tfoot>
           </table>

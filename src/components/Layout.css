@@ -14,6 +14,7 @@
   height: 100vh;
   left: 0;
   top: 0;
+  z-index: 100; /* stay above page content that scrolls underneath */
 }
 
 .sidebar-header {
@@ -140,6 +141,7 @@
 .main-content {
   flex: 1;
   margin-left: 260px;
+  min-width: 0; /* don't stretch to fit wide tables — let them scroll inside their own box */
   min-height: 100vh;
   display: flex;
   flex-direction: column;

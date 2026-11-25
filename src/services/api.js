@@ -60,7 +60,9 @@ export const userService = {
   toggleDeleteReceipts: (id, delete_receipts) => api.patch(`/users/${id}/delete-receipts`, { delete_receipts }),
   toggleDeleteSavedPayouts: (id, delete_saved_payouts) => api.patch(`/users/${id}/delete-saved-payouts`, { delete_saved_payouts }),
   toggleCreateImprests: (id, create_imprests) => api.patch(`/users/${id}/create-imprests`, { create_imprests }),
+  toggleViewClientPayments: (id, view_client_payments) => api.patch(`/users/${id}/view-client-payments`, { view_client_payments }),
   toggleRecordClientPayments: (id, record_client_payments) => api.patch(`/users/${id}/record-client-payments`, { record_client_payments }),
+  toggleDeleteClientPayments: (id, delete_client_payments) => api.patch(`/users/${id}/delete-client-payments`, { delete_client_payments }),
   toggleViewStore: (id, view_store) => api.patch(`/users/${id}/view-store`, { view_store }),
   toggleEditStore: (id, edit_store) => api.patch(`/users/${id}/edit-store`, { edit_store }),
   toggleViewProposals: (id, view_proposals) => api.patch(`/users/${id}/view-proposals`, { view_proposals }),
@@ -168,7 +170,8 @@ export const projectService = {
   deleteComment: (id, commentId) => api.delete(`/projects/${id}/comments/${commentId}`),
 };
 
-// Client payments received for a project — all need record_client_payments
+// Client payments received for a project — list needs view (implied by add or
+// delete), create needs record_client_payments, remove needs delete_client_payments
 export const clientPaymentService = {
   list: (projectId) => api.get(`/projects/${projectId}/client-payments`),
   create: (projectId, data) => api.post(`/projects/${projectId}/client-payments`, data),

@@ -54,7 +54,9 @@ export const AuthProvider = ({ children }) => {
       delete_receipts: profile?.delete_receipts ?? false,
       delete_saved_payouts: profile?.delete_saved_payouts ?? false,
       create_imprests: profile?.create_imprests ?? false,
+      view_client_payments: profile?.view_client_payments ?? false,
       record_client_payments: profile?.record_client_payments ?? false,
+      delete_client_payments: profile?.delete_client_payments ?? false,
       view_store: profile?.view_store ?? false,
       edit_store: profile?.edit_store ?? false,
       view_proposals: profile?.view_proposals ?? false,
@@ -137,8 +139,17 @@ export const AuthProvider = ({ children }) => {
     return user?.create_imprests === true;
   };
 
+  // Adding or deleting client payments implies viewing them.
+  const canViewClientPayments = () => {
+    return user?.view_client_payments === true || user?.record_client_payments === true || user?.delete_client_payments === true;
+  };
+
   const canRecordClientPayments = () => {
     return user?.record_client_payments === true;
+  };
+
+  const canDeleteClientPayments = () => {
+    return user?.delete_client_payments === true;
   };
 
   const canViewStore = () => {
@@ -178,7 +189,9 @@ export const AuthProvider = ({ children }) => {
     canDeleteReceipts,
     canDeleteSavedPayouts,
     canCreateImprests,
+    canViewClientPayments,
     canRecordClientPayments,
+    canDeleteClientPayments,
     canViewStore,
     canEditStore,
     canViewProposals,

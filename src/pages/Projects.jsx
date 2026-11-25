@@ -13,7 +13,7 @@ import './Projects.css';
 const hasReceipt = (txn) => !!txn.image?.url;
 
 const Projects = () => {
-  const { user, canViewAllImprests, canViewProjectComments, canManageProjects, canCreateImprests, canRecordClientPayments, canViewStore } = useAuth();
+  const { user, canViewAllImprests, canViewProjectComments, canManageProjects, canCreateImprests, canViewClientPayments, canViewStore } = useAuth();
   const { openTransaction } = useTabs();
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -534,8 +534,8 @@ const Projects = () => {
                   </div>
                 </div>
 
-                <div className={`detail-summary${canRecordClientPayments() ? ' with-received' : ''}`}>
-                  {canRecordClientPayments() && (
+                <div className={`detail-summary${canViewClientPayments() ? ' with-received' : ''}`}>
+                  {canViewClientPayments() && (
                     <div className="summary-card received">
                       <span className="label">Received from Client</span>
                       <span className="amount">{clientTotal === null ? '—' : formatCurrency(clientTotal)}</span>
@@ -578,7 +578,7 @@ const Projects = () => {
                   </div>
                 )}
 
-                {canRecordClientPayments() && (
+                {canViewClientPayments() && (
                   <ClientPayments projectId={projectDetail.id} onTotalChange={setClientTotal} />
                 )}
 
