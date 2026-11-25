@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,8 @@ import { DRAFT_VERSION, buildDraft, checkDraft } from '../utils/payoutDrafts';
 import PayoutVoucherPDF from '../components/PayoutVoucherPDF';
 import { COMPANY, recipientNumberLine, hasConfirmation, confirmationText, confirmationNote } from '../utils/voucherText';
 import { useTabRefresh } from '../hooks/useTabRefresh';
+import PayoutHistoryFilters from '../components/PayoutHistoryFilters';
+import { EMPTY_HISTORY_FILTERS, filterHistory, isFiltering } from '../utils/payoutHistoryFilter';
 import './Payouts.css';
 
 // ── Constants ──────────────────────────────────────────────────
@@ -208,6 +210,9 @@ const Payouts = () => {
   const [batchLines, setBatchLines] = useState({});
   const [historyPage, setHistoryPage]         = useState(1);
   const [historyPageSize, setHistoryPageSize] = useState(20);
+  const [historyFilters, setHistoryFilters]   = useState(EMPTY_HISTORY_FILTERS);
+  const filteredHistory = useMemo(() => filterHistory(history, historyFilters), [history, historyFilters]);
+  const changeHistoryFilters = (f) => { setHistoryFilters(f); setHistoryPage(1); };
   const [voucher, setVoucher]       = useState(null);
 
   // ── Projects ─────────────────────────────────────────────────
@@ -1693,15 +1698,42 @@ const Payouts = () => {
                     <p>No payout history yet. Initiate a payment using the menu on the right.</p>
                   </div>
                 ) : (() => {
-                  const totalPages  = Math.ceil(history.length / historyPageSize);
+                  const rows        = filteredHistory;
+                  const filtering   = isFiltering(historyFilters);
+                  const totalPages  = Math.max(1, Math.ceil(rows.length / historyPageSize));
                   const safePage    = Math.min(historyPage, totalPages);
                   const start       = (safePage - 1) * historyPageSize;
-                  const pageEntries = history.slice(start, start + historyPageSize);
+                  const pageEntries = rows.slice(start, start + historyPageSize);
+                  const completed   = rows.filter(h => h.status === 'completed');
+                  const completedSum = completed.reduce((s, h) => s + (h.amount || 0), 0);
                   return (
                     <>
+                      <PayoutHistoryFilters
+                        history={history}
+                        filters={historyFilters}
+                        onChange={changeHistoryFilters}
+                        typeLabels={TYPE_LABEL}
+                        statusMeta={STATUS_META}
+                      />
+
+                      {rows.length === 0 ? (
+                        <div className="po-empty">
+                          <span className="po-empty-icon">🔍</span>
+                          <p>No payments match these filters.</p>
+                          <button type="button" className="po-filter-clear" onClick={() => changeHistoryFilters(EMPTY_HISTORY_FILTERS)}>
+                            Clear filters
+                          </button>
+                        </div>
+                      ) : (<>
                       <div className="po-ledger-toolbar">
                         <span className="po-ledger-count">
-                          Showing {start + 1}–{Math.min(start + historyPageSize, history.length)} of {history.length}
+                          Showing {start + 1}–{Math.min(start + historyPageSize, rows.length)} of {rows.length}
+                          {filtering && <> (filtered from {history.length})</>}
+                          {filtering && (
+                            <span className="po-filter-total">
+                              · {completed.length} completed · {fmtCur(completedSum)}
+                            </span>
+                          )}
                         </span>
                         <div className="po-ledger-page-size">
                           <span>Rows per page:</span>
@@ -1866,6 +1898,7 @@ const Payouts = () => {
                           >»</button>
                         </div>
                       )}
+                      </>)}
                     </>
                   );
                 })()}
