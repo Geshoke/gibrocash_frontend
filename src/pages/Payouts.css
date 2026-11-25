@@ -1202,10 +1202,40 @@
 
 @media (max-width: 860px) {
   .po-hero-row { grid-template-columns: 1fr; }
-  .po-main     { grid-template-columns: 1fr; }
   .po-nav-panel { display: grid; grid-template-columns: repeat(4, 1fr); }
   .po-nav-header { display: none; }
   .po-nav-mini-stats { display: none; }
+
+  /* Phones are mostly used for urgent payments: put Operations first, then
+     the balance, then the open view, with the stat cards last. po-main's
+     children join the page's column so they can be ordered with the rest. */
+  .po-main          { display: contents; }
+  .po-nav-panel     { order: 1; }
+  .po-hero-row      { order: 2; }
+  .po-content-panel { order: 3; scroll-margin-top: 64px; }
+  .po-stats-row     { order: 4; }
+
+  /* Transaction Payout: first, full width, and stands out */
+  .po-nav-item--primary {
+    order: -1;
+    grid-column: 1 / -1;
+    justify-content: center;
+    padding: 16px;
+    background: #1d4ed8;
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .po-nav-item--primary .po-nav-label,
+  .po-nav-item--primary .po-nav-arrow { color: #fff; }
+  .po-nav-item--primary:hover,
+  .po-nav-item--primary.active { background: #1e40af; color: #fff; }
+
+  /* Balance cards: compact so the form isn't pushed far down */
+  .po-hero-card { padding: 14px 16px; }
+  .po-hero-card .po-hero-amount { font-size: 1.6rem; }
+  .po-hero-indicators,
+  .po-hero-card.secondary .po-hero-sub { display: none; }
 }
 
 @media (max-width: 600px) {
@@ -1874,3 +1904,120 @@ html.dark .po-chip:hover { background: #1f2937; }
 html.dark .po-chip.active { background: #1a2f4a; border-color: #3182ce; color: #90cdf4; }
 html.dark .po-filter-clear:hover { background: #1a2f4a; }
 html.dark .po-filter-total { color: #e2e8f0; }
+
+/* ── Batch payout on phones ──────────────────────────────────────
+   Desktop shows the add-item form and the item list side by side. On a
+   phone that pushed the list off-screen, so stack them: form, then list,
+   then phone + pay. List rows become compact two-line cards. */
+.po-batch-running { display: none; }
+
+@media (max-width: 860px) {
+  .po-batch-layout { flex-direction: column; align-items: stretch; gap: 20px; padding: 0 16px 16px; }
+  .po-batch-form-col { flex: none; width: 100%; min-width: 0; }
+  .po-batch-running {
+    display: block;
+    margin: 8px 0 0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #ebf8ff;
+    color: #2b6cb0;
+    font-size: 0.84rem;
+    font-weight: 600;
+    text-align: center;
+  }
+}
+
+@media (max-width: 600px) {
+  .po-batch-table-col .po-table-wrap { overflow-x: visible; }
+  .po-batch-table,
+  .po-batch-table tbody,
+  .po-batch-table tfoot { display: block; }
+  .po-batch-table thead { display: none; }
+  .po-batch-table tbody tr {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    grid-template-areas:
+      "desc amount remove"
+      "proj amount remove";
+    align-items: center;
+    column-gap: 8px;
+    padding: 10px 4px;
+    border-bottom: 1px solid #edf2f7;
+  }
+  .po-batch-table tbody td { padding: 0; border: none; }
+  .po-batch-table tbody td:nth-child(1) { display: none; }
+  .po-batch-table tbody td:nth-child(2) { grid-area: proj; font-size: 0.75rem; color: #718096; }
+  .po-batch-table tbody td:nth-child(3) { grid-area: desc; font-weight: 500; overflow-wrap: anywhere; white-space: normal; overflow: visible; text-overflow: clip; max-width: none; }
+  .po-batch-table tbody td:nth-child(4) { grid-area: amount; white-space: nowrap; font-weight: 600; }
+  .po-batch-table tbody td:nth-child(5) { grid-area: remove; }
+  .po-batch-table .po-batch-remove-btn { padding: 8px 10px; font-size: 1rem; }
+  .po-batch-row-issue { background: #fff7ed; border-radius: 6px; }
+  .po-batch-table tfoot tr { display: flex; justify-content: space-between; align-items: center; padding: 12px 4px 0; }
+  .po-batch-table tfoot td { padding: 0; border: none; }
+  .po-batch-table tfoot td:last-child { display: none; }
+}
+
+html.dark .po-batch-running { background: #1a2f4a; color: #90cdf4; }
+html.dark .po-batch-table tbody tr { border-bottom-color: #2d3748; }
+
+/* ── Contact picker on phones ────────────────────────────────────
+   The dropdown sits inside .po-content-panel (overflow: hidden), which cut
+   it off after the first contact near the bottom of the form. On phones it
+   opens as a panel over the page instead. Desktop keeps the dropdown. */
+.po-recipient-backdrop,
+.po-recipient-sheet-head { display: none; }
+
+/* Desktop: open upwards when there is no room below (set by RecipientPicker) */
+.po-recipient-dropdown.up { top: auto; bottom: calc(100% + 4px); }
+
+@media (max-width: 860px) {
+  .po-recipient-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    background: rgba(15, 23, 42, 0.45);
+  }
+  .po-recipient-dropdown {
+    position: fixed;
+    top: 64px;
+    bottom: auto;
+    left: 12px;
+    right: 12px;
+    min-width: 0;
+    max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
+    display: flex;
+    flex-direction: column;
+    z-index: 401;
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  }
+  .po-recipient-dropdown.up { top: 64px; bottom: auto; } /* phone panel ignores open-upwards */
+  .po-recipient-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px 8px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #1e293b;
+  }
+  .po-recipient-sheet-close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .po-recipient-search-input { font-size: 1rem; padding: 10px 12px; } /* 16px stops iOS zooming in */
+  .po-recipient-list { max-height: none; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .po-recipient-option { padding: 14px 16px; }
+}
+
+html.dark .po-recipient-sheet-head { color: #e2e8f0; }
+html.dark .po-recipient-sheet-close { background: #252f3f; color: #d1d5db; }

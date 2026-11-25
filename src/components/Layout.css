@@ -209,18 +209,103 @@
   min-height: 0;
 }
 
+/* Phone-only pieces, hidden on wider screens */
+.mobile-topbar,
+.sidebar-close-btn,
+.sidebar-backdrop { display: none; }
+
 @media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  /* Slim bar with the ☰ Menu button instead of the full sidebar on top of every page */
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    padding: 8px 12px;
+    background: #1a365d;
+    color: #fff;
+  }
+  .mobile-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 1rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .mobile-menu-btn span { font-size: 0.85rem; font-weight: 600; }
+  .mobile-topbar-title {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mobile-topbar-logo {
+    height: 32px;
+    width: auto;
+    background: #fff;
+    border-radius: 6px;
+    padding: 2px 4px;
+  }
+
+  /* The sidebar becomes a drawer that slides in from the left */
   .sidebar {
-    width: 100%;
-    height: auto;
-    position: relative;
+    width: 280px;
+    max-width: 85vw;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: none;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
+  }
+  /* In the drawer the whole panel scrolls, so no link gets squeezed out of view */
+  .sidebar > * { flex-shrink: 0; }
+  .sidebar-nav { flex: none; overflow: visible; padding: 8px 0; }
+  .sidebar-header { padding: 16px 56px 12px 16px; }
+  .sidebar-close-btn {
+    display: block;
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    background: rgba(0, 0, 0, 0.45);
   }
 
   .main-content {
     margin-left: 0;
-  }
-
-  .layout {
-    flex-direction: column;
   }
 }

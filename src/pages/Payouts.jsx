@@ -153,6 +153,15 @@ const getTxnTotals = (form) => {
 const Payouts = () => {
   const { user, canEditContacts, canDeleteSavedPayouts } = useAuth();
   const [view, setView] = useState('history');
+  const contentPanelRef = useRef(null);
+  // Picking an operation on a phone jumps down to its form, since Operations
+  // sits above the balance there (see the ≤860px rules in Payouts.css).
+  const openView = (key) => {
+    setView(key);
+    if (window.matchMedia('(max-width: 860px)').matches) {
+      requestAnimationFrame(() => contentPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  };
 
   // ── Contacts (backend-backed recipient directory) ────────────
   const [contacts, setContacts] = useState([]);
@@ -1618,10 +1627,12 @@ const Payouts = () => {
         </div>
 
         {/* ── Row 3: Main body ──────────────────────────────── */}
+        {/* On phones (≤860px) Payouts.css reorders the page: Operations first,
+            then balance, the active view, and the stat cards last. */}
         <div className="po-main">
 
           {/* Left: active view */}
-          <div className="po-content-panel">
+          <div className="po-content-panel" ref={contentPanelRef}>
 
             {/* ── History ─────────────────────────────────── */}
             {txnSuccess && (
@@ -2383,6 +2394,12 @@ const Payouts = () => {
                       <button className="po-batch-add-btn" onClick={addBatchItem}>
                         + Add Item
                       </button>
+                      {/* Phones only (see Payouts.css): confirms the add, since the list is further down */}
+                      {batchItems.length > 0 && (
+                        <p className="po-batch-running">
+                          {batchItems.length} item{batchItems.length !== 1 ? 's' : ''} · {fmtCur(batchItems.reduce((s, i) => s + i.amount, 0))} — listed below
+                        </p>
+                      )}
                     </div>
 
                     {/* Right: items table + initiate */}
@@ -2579,8 +2596,8 @@ const Payouts = () => {
             {NAV_ITEMS.map(item => (
               <button
                 key={item.key}
-                className={`po-nav-item ${view === item.key ? 'active' : ''}`}
-                onClick={() => setView(item.key)}
+                className={`po-nav-item ${view === item.key ? 'active' : ''}${item.key === 'txn_payout' ? ' po-nav-item--primary' : ''}`}
+                onClick={() => openView(item.key)}
               >
                 <span className="po-nav-icon">{item.icon}</span>
                 <span className="po-nav-label">{item.label}</span>

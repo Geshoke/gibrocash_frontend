@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTabs, NAV_ITEMS } from '../context/TabsContext';
@@ -49,15 +50,37 @@ const Layout = ({ children }) => {
   const auth = useAuth();
   const { user, logout } = auth;
   const location = useLocation();
+  // Phones: the sidebar is a drawer behind the ☰ Menu button (see Layout.css).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = () => setMenuOpen(false);
 
   const navItems = NAV_ITEMS.filter((item) => {
     if (!item.requires) return true;
     return PERMISSION_CHECKS[item.requires]?.(auth);
   });
 
+  const currentLabel = navItems.find((item) => item.path === location.pathname)?.label;
+
   return (
     <div className="layout">
-      <aside className="sidebar">
+      <header className="mobile-topbar">
+        <button
+          type="button"
+          className="mobile-menu-btn"
+          onClick={() => setMenuOpen(true)}
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+        >
+          ☰ <span>Menu</span>
+        </button>
+        <span className="mobile-topbar-title">{currentLabel || 'GIBRO FINANCES'}</span>
+        <img src={logo} alt="Gibro Enterprise Ltd" className="mobile-topbar-logo" />
+      </header>
+
+      {menuOpen && <div className="sidebar-backdrop" onClick={closeMenu} aria-hidden="true" />}
+
+      <aside className={`sidebar${menuOpen ? ' open' : ''}`}>
+        <button type="button" className="sidebar-close-btn" onClick={closeMenu} aria-label="Close menu">×</button>
         <div className="sidebar-header">
           <img src={logo} alt="Gibro Enterprise Ltd" className="sidebar-logo" />
         </div>
@@ -70,6 +93,7 @@ const Layout = ({ children }) => {
                 key={item.path}
                 to={item.path}
                 className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
+                onClick={closeMenu}
               >
                 <span className="nav-icon">{item.icon}</span>
                 <span className="nav-label">{item.label}</span>
@@ -80,6 +104,7 @@ const Layout = ({ children }) => {
         <Link
           to="/settings"
           className={`nav-item settings-nav-item ${location.pathname === '/settings' ? 'active' : ''}`}
+          onClick={closeMenu}
         >
           <span className="nav-icon">⚙️</span>
           <span className="nav-label">Settings</span>

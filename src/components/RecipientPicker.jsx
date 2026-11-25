@@ -10,6 +10,7 @@ const digits = (p) => {
 const RecipientPicker = ({ value, onChange, recipients = [], placeholder, disabled }) => {
   const [open, setOpen]               = useState(false);
   const [search, setSearch]           = useState('');
+  const [dropUp, setDropUp]           = useState(false);
   const wrapRef  = useRef(null);
   const searchRef = useRef(null);
 
@@ -21,9 +22,11 @@ const RecipientPicker = ({ value, onChange, recipients = [], placeholder, disabl
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
-  // Focus search input when dropdown opens
+  // Focus search input when dropdown opens — but not on phones, where it would
+  // pop the keyboard up over the list; there the list shows first and the
+  // search box is one tap away.
   useEffect(() => {
-    if (open && searchRef.current) searchRef.current.focus();
+    if (open && searchRef.current && !window.matchMedia('(max-width: 860px)').matches) searchRef.current.focus();
   }, [open]);
 
   const handleInputChange = (e) => onChange(e.target.value);
@@ -34,6 +37,13 @@ const RecipientPicker = ({ value, onChange, recipients = [], placeholder, disabl
 
   const toggleOpen = () => {
     setSearch('');
+    if (!open && wrapRef.current) {
+      // The payout panels clip overflow, so open upwards when there isn't room
+      // for the list below the field inside its panel (or the window).
+      const clip = wrapRef.current.closest('.po-content-panel');
+      const limit = Math.min(window.innerHeight, clip ? clip.getBoundingClientRect().bottom : Infinity);
+      setDropUp(limit - wrapRef.current.getBoundingClientRect().bottom < 300);
+    }
     setOpen(o => !o);
   };
 
@@ -73,8 +83,15 @@ const RecipientPicker = ({ value, onChange, recipients = [], placeholder, disabl
         <div className="po-recipient-selected-name">{selectedName}</div>
       )}
 
+      {/* On phones (≤860px, see Payouts.css) the list opens as a panel over the
+          page instead of a dropdown, so the form's container can't clip it. */}
+      {open && <div className="po-recipient-backdrop" onMouseDown={() => setOpen(false)} aria-hidden="true" />}
       {open && (
-        <div className="po-recipient-dropdown">
+        <div className={`po-recipient-dropdown${dropUp ? ' up' : ''}`} role="dialog" aria-label="Choose contact">
+          <div className="po-recipient-sheet-head">
+            <span>Choose contact</span>
+            <button type="button" className="po-recipient-sheet-close" onClick={() => setOpen(false)} aria-label="Close">×</button>
+          </div>
           <div className="po-recipient-search-wrap">
             <input
               ref={searchRef}
