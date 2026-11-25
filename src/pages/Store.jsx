@@ -11,6 +11,59 @@ const formatCurrency = (amount) =>
 
 const formatQty = (n) => new Intl.NumberFormat('en-KE', { maximumFractionDigits: 2 }).format(n || 0);
 
+// Searchable project picker: type to shorten the list, click to choose.
+// `emptyLabel` adds a "no project" option at the top (for optional fields).
+const ProjectPicker = ({ projects, value, onChange, placeholder, emptyLabel }) => {
+  const selected = projects.find(p => String(p.id) === String(value));
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+
+  const q = query.trim().toLowerCase();
+  const matches = q ? projects.filter(p => (p.name || '').toLowerCase().includes(q)) : projects;
+
+  const choose = (id) => {
+    onChange(id);
+    setQuery('');
+    setOpen(false);
+    document.activeElement?.blur();
+  };
+
+  return (
+    <div className="st-combo">
+      <input
+        type="text"
+        value={open ? query : (selected?.name || '')}
+        placeholder={selected ? selected.name : placeholder}
+        onFocus={() => { setQuery(''); setOpen(true); }}
+        onBlur={() => setOpen(false)}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onKeyDown={e => {
+          if (e.key === 'Escape') { setOpen(false); e.target.blur(); }
+          if (e.key === 'Enter' && matches.length === 1) { e.preventDefault(); choose(matches[0].id); e.target.blur(); }
+        }}
+      />
+      {open && (
+        <div className="st-combo-list">
+          {emptyLabel && !q && (
+            <button type="button" className={`st-combo-item${!value ? ' selected' : ''}`}
+              onMouseDown={e => { e.preventDefault(); choose(''); }}>
+              {emptyLabel}
+            </button>
+          )}
+          {matches.map(p => (
+            <button type="button" key={p.id}
+              className={`st-combo-item${String(p.id) === String(value) ? ' selected' : ''}`}
+              onMouseDown={e => { e.preventDefault(); choose(p.id); }}>
+              {p.name}
+            </button>
+          ))}
+          {matches.length === 0 && <span className="st-combo-empty">No projects match “{query}”</span>}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const formatDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
@@ -298,24 +351,29 @@ const Store = () => {
         </div>
 
         {m.type === 'issue' && (
-          <label className="st-field">
+          <div className="st-field">
             <span>Project</span>
-            <select value={m.project_id} onChange={set('project_id')}>
-              <option value="">Choose a project…</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </label>
+            <ProjectPicker
+              projects={projects}
+              value={m.project_id}
+              onChange={id => setMovement(prev => ({ ...prev, project_id: id }))}
+              placeholder="Search for a project…"
+            />
+          </div>
         )}
 
         {m.type === 'checkout' && (
           <div className="st-field-row">
-            <label className="st-field">
+            <div className="st-field">
               <span>Project <em>(optional)</em></span>
-              <select value={m.project_id} onChange={set('project_id')}>
-                <option value="">— None —</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </label>
+              <ProjectPicker
+                projects={projects}
+                value={m.project_id}
+                onChange={id => setMovement(prev => ({ ...prev, project_id: id }))}
+                placeholder="Search for a project…"
+                emptyLabel="— None —"
+              />
+            </div>
             <label className="st-field">
               <span>Taken by</span>
               <input type="text" value={m.holder_name} onChange={set('holder_name')} placeholder="e.g. Juma (site lead)" />

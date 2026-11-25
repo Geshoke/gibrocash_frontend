@@ -479,3 +479,35 @@
   flex: none;
 }
 .st-pick-empty { padding: 14px; text-align: center; list-style: none; }
+
+/* ── Searchable project picker ────────────────────────────── */
+.st-combo { position: relative; }
+.st-combo input { width: 100%; box-sizing: border-box; }
+.st-combo-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.st-combo-item {
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-family: inherit;
+  color: #2d3748;
+}
+.st-combo-item:hover,
+.st-combo-item.selected { background: #ebf4ff; }
+.st-combo-empty { padding: 10px 12px; font-size: 0.82rem; color: #718096; }
