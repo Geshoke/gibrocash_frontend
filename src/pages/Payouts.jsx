@@ -264,8 +264,10 @@ const Payouts = () => {
   const pollRef                         = useRef(null);
   const pollEscapeTimerRef              = useRef(null);
 
-  // ── Account balance (last-known from B2C callbacks) ──────────
+  // ── Account balance (live query, or last B2C callback if newer) ──
   const [balance, setBalance] = useState({ workingAccountFunds: null, utilityAccountFunds: null, asOf: null });
+  const [balanceCheck, setBalanceCheck] = useState({ state: 'idle', message: '' }); // idle | checking | error
+  const balancePollRef = useRef(null);
 
   // ── Failed imprest-transaction ledger (localStorage) ────────
   const [failedTxns, setFailedTxns] = useState(() => {
@@ -453,6 +455,44 @@ const Payouts = () => {
       setBalance(data);
     } catch { /* balance display is best-effort */ }
   };
+
+  // Ask M-Pesa for a fresh balance. The answer comes back on a Daraja callback, so
+  // poll the query until it settles (or give up after a minute) and then reload it.
+  const BALANCE_WAIT_MS = 60000;
+  const refreshBalance = async () => {
+    clearTimeout(balancePollRef.current);
+    setBalanceCheck({ state: 'checking', message: '' });
+    let queryId;
+    try {
+      ({ data: { queryId } } = await payoutService.refreshBalance());
+    } catch (err) {
+      setBalanceCheck({ state: 'error', message: err.response?.data?.error || 'Could not request the balance from M-Pesa.' });
+      return;
+    }
+    const started = Date.now();
+    const poll = async () => {
+      try {
+        const { data } = await payoutService.getBalanceQuery(queryId);
+        if (data.status === 'success') {
+          await fetchBalance();
+          setBalanceCheck({ state: 'idle', message: '' });
+          return;
+        }
+        if (data.status !== 'pending') {
+          setBalanceCheck({ state: 'error', message: data.resultDesc || 'M-Pesa could not return the balance.' });
+          return;
+        }
+      } catch { /* network blip — keep polling */ }
+      if (Date.now() - started > BALANCE_WAIT_MS) {
+        setBalanceCheck({ state: 'error', message: 'No reply from M-Pesa yet. Try again in a minute.' });
+        return;
+      }
+      balancePollRef.current = setTimeout(poll, 3000);
+    };
+    balancePollRef.current = setTimeout(poll, 2000);
+  };
+
+  useEffect(() => () => clearTimeout(balancePollRef.current), []);
 
   // Phone (B2C) and till/paybill (B2B) txn_payouts are tracked in separate tables; each
   // entry remembers its channel so the retry marks the right one as recorded.
@@ -724,7 +764,7 @@ const Payouts = () => {
     fetchSavedPayouts(true);
   };
 
-  useEffect(() => { fetchLedger(); fetchUnrecordedTxnPayouts(); fetchSavedPayouts(); }, []); // eslint-disable-line
+  useEffect(() => { fetchLedger(); fetchUnrecordedTxnPayouts(); fetchSavedPayouts(); refreshBalance(); }, []); // eslint-disable-line
 
   useTabRefresh('/payouts', () => {
     fetchLedger();
@@ -1573,8 +1613,21 @@ const Payouts = () => {
               <span className="po-ind"><span className="po-ind-dot green"></span>System operational</span>
               <span className="po-ind"><span className="po-ind-dot blue"></span>Daraja API connected</span>
             </div>
-            {balance.asOf && (
-              <div className="po-hero-as-of">As of {fmtDate(balance.asOf)}</div>
+            <div className="po-hero-balance-meta">
+              {balance.asOf && (
+                <span className="po-hero-as-of">As of {fmtDate(balance.asOf)}</span>
+              )}
+              <button
+                type="button"
+                className="po-hero-refresh"
+                onClick={refreshBalance}
+                disabled={balanceCheck.state === 'checking'}
+              >
+                {balanceCheck.state === 'checking' ? 'Checking M-Pesa…' : '↻ Refresh balance'}
+              </button>
+            </div>
+            {balanceCheck.state === 'error' && (
+              <div className="po-hero-balance-error">{balanceCheck.message}</div>
             )}
           </div>
 

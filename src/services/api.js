@@ -263,9 +263,18 @@ export const payoutService = {
   getB2bPayments: () =>
     paybillApi.get('/shortcode_3576329/b2b/payments'),
 
-  // Last-known working + utility account balance (from most recent B2C callback)
+  // Latest working + utility account balance — from the newest of a live balance
+  // query and the balance reported on the last B2C payment result
   getBalance: () =>
-    paybillApi.get('/shortcode_3576329/b2c/balance'),
+    paybillApi.get('/shortcode_3576329/balance'),
+
+  // Ask M-Pesa for the current balance (async) → { queryId, status }
+  refreshBalance: () =>
+    paybillApi.post('/shortcode_3576329/balance/refresh'),
+
+  // Status of a balance query: pending | success | failed | timeout
+  getBalanceQuery: (queryId) =>
+    paybillApi.get(`/shortcode_3576329/balance/queries/${queryId}`),
 
   // txn_payout payments that succeeded but whose imprest transaction was never saved
   getUnrecordedTxnPayouts: () =>

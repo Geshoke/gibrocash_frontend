@@ -92,6 +92,40 @@
   margin-top: 8px;
 }
 
+.po-hero-balance-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 8px;
+}
+
+.po-hero-balance-meta .po-hero-as-of { margin-top: 0; }
+
+.po-hero-refresh {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.9);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.po-hero-refresh:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
+.po-hero-refresh:disabled { cursor: default; opacity: 0.7; }
+
+.po-hero-balance-error {
+  position: relative;
+  z-index: 1;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: #fed7d7;
+}
+
 .po-hero-indicators {
   display: flex;
   gap: 16px;
