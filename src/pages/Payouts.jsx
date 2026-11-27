@@ -951,10 +951,18 @@ const Payouts = () => {
     // A till/paybill Transaction Payout is tracked on the B2B side.
     const channel = modalRef.current?.payload?.channel || 'b2c';
 
+    // Till results carry no receiver name; the server looks it up separately and
+    // reports detailsPending meanwhile. Wait a little for it so the transaction
+    // is recorded with the name, but never hold the payout up for long.
+    const DETAILS_WAIT_MS = 20000;
+    let successSeenAt = null;
+
     pollRef.current = setInterval(async () => {
       try {
         const { data } = await payoutService.checkPayoutStatus(ocid, channel);
         if (data.status === 'success') {
+          if (successSeenAt === null) successSeenAt = Date.now();
+          if (data.detailsPending && Date.now() - successSeenAt < DETAILS_WAIT_MS) return;
           clearInterval(pollRef.current);
           fetchLedger(); // update ledger immediately on confirmed success
           settleModalDraft('paid');
